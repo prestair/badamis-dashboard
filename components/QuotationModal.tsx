@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useQuotations, SavedQuotation, SavedRowState } from "@/context/QuotationContext";
+import dynamic from "next/dynamic";
+
+const QuotationDownload = dynamic(() => import("@/components/QuotationDownload"), { ssr: false });
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -205,6 +208,27 @@ export default function QuotationModal({ onClose, initialData }: Props) {
               <span className="text-green-300 text-sm font-semibold">
                 ✅ {isEdit ? "Updated" : "Saved"} as #{savedSerial}!
               </span>
+            )}
+            {/* Download buttons — show on step 2 */}
+            {step === 2 && (
+              <QuotationDownload
+                quotation={initialData!}
+                partyName={partyName}
+                quotationNo={quotationNo}
+                date={date}
+                subject={subject}
+                rows={itemRows.map((r) => ({
+                  slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  size: r.size, hsn: r.hsn, qty: r.qty,
+                  discount: r.discount, rate: r.rate,
+                  amt: rowAmt(r),
+                }))}
+                gross={gross}
+                discount={overallDisc}
+                afterDiscount={afterDiscount}
+                gst={gst}
+                grandTotal={grandTotal}
+              />
             )}
             {step === 1 ? (
               <button onClick={goToStep2}
@@ -487,7 +511,28 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             )}
             {step === 1 && <span className="text-blue-600 font-semibold">Step 1 of 2 — Fill party details then click Next</span>}
           </p>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center flex-wrap justify-end">
+            {/* Download buttons in bottom bar on step 2 */}
+            {step === 2 && (
+              <QuotationDownload
+                quotation={initialData!}
+                partyName={partyName}
+                quotationNo={quotationNo}
+                date={date}
+                subject={subject}
+                rows={itemRows.map((r) => ({
+                  slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  size: r.size, hsn: r.hsn, qty: r.qty,
+                  discount: r.discount, rate: r.rate,
+                  amt: rowAmt(r),
+                }))}
+                gross={gross}
+                discount={overallDisc}
+                afterDiscount={afterDiscount}
+                gst={gst}
+                grandTotal={grandTotal}
+              />
+            )}
             <button onClick={onClose}
               className="px-5 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors">
               Cancel
