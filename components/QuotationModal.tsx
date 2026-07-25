@@ -135,7 +135,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   }
 
   // ── Save ───────────────────────────────────────────────────────────────────
-  function handleSave() {
+  async function handleSave() {
     const savedRows: SavedRowState[] = itemRows.map((r) => {
       const rate = r.rate === "" ? null : Number(r.rate);
       const qty  = Number(r.qty) || 0;
@@ -149,13 +149,19 @@ export default function QuotationModal({ onClose, initialData }: Props) {
       rows: savedRows, gross, discount: overallDisc, afterDiscount, gst, grandTotal,
     };
 
-    if (isEdit && initialData) {
-      updateQuotation(initialData.serialNo, payload);
-      setSavedSerial(initialData.serialNo);
-    } else {
-      setSavedSerial(saveQuotation(payload));
+    try {
+      if (isEdit && initialData) {
+        await updateQuotation(initialData.dbId, payload);
+        setSavedSerial(initialData.serialNo);
+      } else {
+        const serial = await saveQuotation(payload);
+        setSavedSerial(serial);
+      }
+      setSaved(true);
+    } catch (e) {
+      console.error("Save failed", e);
+      alert("Failed to save. Please try again.");
     }
-    setSaved(true);
   }
 
   const inp = (err?: string) =>
