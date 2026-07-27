@@ -161,6 +161,8 @@ export default function QuotationModal({ onClose, initialData }: Props) {
         setSavedSerial(serial);
       }
       setSaved(true);
+      // ── Auto-close after 1.5 seconds — return to dashboard ──
+      setTimeout(() => onClose(), 1500);
     } catch (e) {
       console.error("Save failed", e);
       alert("Failed to save. Please try again.");
@@ -205,8 +207,8 @@ export default function QuotationModal({ onClose, initialData }: Props) {
           </div>
           <div className="flex items-center gap-3">
             {saved && savedSerial && (
-              <span className="text-green-300 text-sm font-semibold">
-                ✅ {isEdit ? "Updated" : "Saved"} as #{savedSerial}!
+              <span className="text-green-300 text-sm font-semibold animate-pulse">
+                ✅ {isEdit ? "Updated" : "Saved"} #{savedSerial}! Returning…
               </span>
             )}
             {/* Download buttons — show on step 2 */}
