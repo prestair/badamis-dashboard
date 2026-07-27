@@ -1,12 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-if (!url || !key) {
-  throw new Error(
-    "Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel → Settings → Environment Variables."
-  );
+// Returns null if env vars not set (local dev without Supabase)
+export function getSupabaseClient() {
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
-
-export const supabase = createClient(url, key);
