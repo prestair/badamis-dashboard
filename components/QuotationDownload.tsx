@@ -172,6 +172,53 @@ async function downloadPDF(props: Props) {
   doc.setFontSize(7);
   doc.text("Bank: Prestair Systems LLP  |  A/C: 4513086230  |  IFSC: KKBK0000154  |  Kotak Mahindra Bank, Sector 51 Noida", 148, ty + 9, { align: "center" });
 
+  // ── Terms & Conditions ──────────────────────────────────────────────────────
+  const termsY = ty + 18;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 58, 95);
+  doc.text("Terms & Conditions:", 10, termsY);
+
+  const terms = [
+    "1. Rates: - valid for 10 days.",
+    "2. Delivery Period: - 8 WEEKS. (However, under unavoidable circumstances, like natural calamities, war strikes etc. We shall not be liable for any cancellation or delay in meeting delivery date.)",
+    "3. Taxes: - G.S.T & Other taxes will be charged extra as applicable by Central Govt./State Govt. time to time. Transportation/Forwarding/Loading/Unloading: Extra and to be paid by client.",
+    "4. Transportation/Forwarding/Loading/Unloading: - Extra on actual paid by client. Client may also arrange their own vehicle for pickup.",
+    "5. Way bill/Road Permit if required, to be arranged by the Client.",
+    "6. Packing: (a) Shrink roll/thermocol packing FOC  (b) Wooden crate/cargo box packing charge extra on actual if required.",
+    "7. Site work: - All civil/masonry/wooden/electrical work done by client at his own cost. Rates: ex-works, Delhi.",
+    "8. Payment Terms: (a) 60% advance along with confirm purchase order and balance 40% payment before delivery from our warehouse.  (b) 100% advance for Imported Equipment.",
+    "9. Jurisdiction Noida (U.P)",
+    "10. The order is/are accepted, subject no to strikes, lockout, accidents, fire, riots, civil commotion & other causes beyond our control.",
+    "11. The lodging and boarding of the mechanic team will be arranged by the client at their own cost outside Delhi.",
+    "12. Once the order is placed cannot be cancelled.",
+  ];
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(60, 60, 60);
+  let tY = termsY + 5;
+  terms.forEach((line) => {
+    const split = doc.splitTextToSize(line, 275);
+    // Add new page if needed
+    if (tY + split.length * 4 > 200) {
+      doc.addPage();
+      tY = 15;
+    }
+    doc.text(split, 10, tY);
+    tY += split.length * 4 + 1;
+  });
+
+  // Bank details at end
+  tY += 3;
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 58, 95);
+  doc.text("Bank Details:", 10, tY);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(60, 60, 60);
+  doc.text("Account Name: Prestair Systems LLP  |  A/C No: 4513086230  |  IFSC: KKBK0000154  |  Kotak Mahindra Bank, Sector 51 Noida  |  GST: 09AATFP8342B1ZX", 10, tY + 5, { maxWidth: 275 });
+
   const filename = `Quotation_${props.quotationNo || props.partyName}_${props.date}.pdf`
     .replace(/[/\\?%*:|"<>]/g, "-");
   doc.save(filename);
