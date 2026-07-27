@@ -96,31 +96,79 @@ async function downloadPDF(props: Props) {
 
   // ── Page header (full-width dark band) ───────────────────────────────────
   doc.setFillColor(22, 40, 70);
-  doc.rect(0, 0, W, 24, "F");
+  doc.rect(0, 0, W, 28, "F");
 
-  // Logo text
+  // Prestair Logo — stylized text
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text("PRESTAIR SYSTEMS LLP", ML, 10);
+  doc.text("Prestair", ML, 11);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(160, 190, 230);
+  doc.text("Systems LLP", ML, 17);
+  // underline
+  doc.setDrawColor(100, 140, 200);
+  doc.line(ML, 18.5, ML + 32, 18.5);
+  doc.setFontSize(6);
+  doc.setTextColor(140, 170, 220);
+  doc.text("Commercial Food Service Equipments", ML, 22);
+  doc.text("Since 1982", ML, 26);
 
-  // Tagline
+  // ── Certification Badges (right side of header) ──────────────────────────
+  const badgeY = 6;
+  const badgeR = MR; // right edge
+
+  // Helper: draw a circular badge
+  function drawBadge(x: number, y: number, r: number, bg: [number,number,number], text: string, textColor: [number,number,number], fontSize: number) {
+    doc.setFillColor(...bg);
+    doc.circle(x, y, r, "F");
+    doc.setDrawColor(200, 210, 230);
+    doc.circle(x, y, r, "S");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(...textColor);
+    doc.text(text, x, y + fontSize * 0.35, { align: "center" });
+  }
+
+  // CE Mark
+  drawBadge(badgeR - 4,  badgeY + 4, 4, [255,255,255], "CE", [22,40,70], 5.5);
+  // QCS
+  drawBadge(badgeR - 13, badgeY + 4, 4, [255,255,255], "QCS", [22,40,70], 4.5);
+  // IAF
+  drawBadge(badgeR - 22, badgeY + 4, 4, [255,255,255], "IAF", [22,40,70], 4.5);
+
+  // ISO 9001:2015 — rectangular badge
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(badgeR - 40, badgeY, 12, 8, 1, 1, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(5);
+  doc.setTextColor(22, 40, 70);
+  doc.text("ISO", badgeR - 34, badgeY + 3.5, { align: "center" });
+  doc.setFontSize(4);
+  doc.text("9001:2015", badgeR - 34, badgeY + 6.5, { align: "center" });
+
+  // UAF badge
+  drawBadge(badgeR - 49, badgeY + 4, 4, [200, 160, 50], "UAF", [255,255,255], 4.5);
+
+  // Company info (center of header)
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(180, 200, 240);
-  doc.text("Commercial Food Service Equipments  |  Since 1982  |  ISO 9001:2015 Certified", ML, 15);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305  |  GST: 09AATFP8342B1ZX", ML, 19.5);
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", 105, 20, { align: "center" });
+  doc.text("GST: 09AATFP8342B1ZX  |  ISO 9001:2015 Certified", 105, 25, { align: "center" });
 
-  // Quotation No + Date (top-right)
+  // Quotation No + Date (right of header, below badges)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(200, 220, 255);
-  doc.text(`Quotation: ${props.quotationNo || "—"}`, MR, 12, { align: "right" });
+  doc.text(`Quotation: ${props.quotationNo || "—"}`, MR, 20, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.text(`Date: ${props.date}`, MR, 18, { align: "right" });
+  doc.setFontSize(7);
+  doc.text(`Date: ${props.date}`, MR, 25, { align: "right" });
 
   // ── Party info box ───────────────────────────────────────────────────────
-  let y = 30;
+  let y = 34;
   doc.setFillColor(246, 249, 255);
   doc.roundedRect(ML, y, CW, 22, 2, 2, "F");
   doc.setDrawColor(200, 210, 230);
@@ -149,7 +197,7 @@ async function downloadPDF(props: Props) {
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: ML },
-    head: [["#", "Item Code", "Description", "Size", "HSN", "Qty", "Disc(₹)", "Rate(₹)", "Amount(₹)"]],
+    head: [["#", "Item Code", "Description", "Size", "HSN", "Qty", "Disc (₹)", "Rate (₹)", "Amount (₹)"]],
     body: props.rows.map((r, i) => [
       String(i + 1),
       r.itemCode || "—",
@@ -162,37 +210,45 @@ async function downloadPDF(props: Props) {
       r.amt !== null ? fmtNum(r.amt) : "NQ",
     ]),
     headStyles: {
-      fillColor:  [22, 40, 70],
-      textColor:  [255, 255, 255],
-      fontStyle:  "bold",
-      fontSize:   7,
-      cellPadding: 2.5,
+      fillColor:   [22, 40, 70],
+      textColor:   [255, 255, 255],
+      fontStyle:   "bold",
+      fontSize:    7,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      valign:      "middle",
+      halign:      "center",
     },
     bodyStyles: {
       fontSize:    7,
-      cellPadding: 2,
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
       textColor:   [30, 40, 60],
+      valign:      "middle",
     },
     alternateRowStyles: { fillColor: [245, 248, 255] },
+    tableWidth: CW,
     columnStyles: {
-      0: { cellWidth: 8,  halign: "center" },
-      1: { cellWidth: 18, halign: "center", fontStyle: "bold" },
-      2: { cellWidth: 65 },
-      3: { cellWidth: 22, halign: "center" },
-      4: { cellWidth: 14, halign: "center" },
-      5: { cellWidth: 8,  halign: "center" },
-      6: { cellWidth: 16, halign: "right" },
-      7: { cellWidth: 18, halign: "right" },
-      8: { cellWidth: 20, halign: "right", fontStyle: "bold" },
+      0: { cellWidth: 7,   halign: "center",  fontStyle: "bold" },
+      1: { cellWidth: 19,  halign: "center",  fontStyle: "bold" },
+      2: { cellWidth: 68,  halign: "left"   },
+      3: { cellWidth: 22,  halign: "center" },
+      4: { cellWidth: 13,  halign: "center" },
+      5: { cellWidth: 8,   halign: "center" },
+      6: { cellWidth: 17,  halign: "right"  },
+      7: { cellWidth: 17,  halign: "right"  },
+      8: { cellWidth: 15,  halign: "right",  fontStyle: "bold" },
     },
     didDrawPage: (data) => {
-      // Re-draw header on every page
+      // Re-draw mini header on every page
       doc.setFillColor(22, 40, 70);
-      doc.rect(0, 0, W, 6, "F");
-      doc.setFontSize(6);
-      doc.setTextColor(180, 200, 240);
-      doc.text("PRESTAIR SYSTEMS LLP  |  Quotation Dashboard", ML, 4.5);
-      doc.text(`Page ${data.pageNumber}`, MR, 4.5, { align: "right" });
+      doc.rect(0, 0, W, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.5);
+      doc.setTextColor(200, 220, 255);
+      doc.text("PRESTAIR SYSTEMS LLP", ML, 5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(160, 190, 240);
+      doc.text(`Quotation: ${props.quotationNo || "—"}  |  ${props.partyName}`, 105, 5, { align: "center" });
+      doc.text(`Page ${data.pageNumber}`, MR, 5, { align: "right" });
     },
   });
 
