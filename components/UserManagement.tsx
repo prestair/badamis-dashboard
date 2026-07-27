@@ -6,11 +6,13 @@ import { useAuth, UserRole } from "@/context/AuthContext";
 type Tab = "users" | "add";
 
 export default function UserManagement({ onClose }: { onClose: () => void }) {
-  const { users, loggedUser, createUser, deleteUser, adminChangePassword } = useAuth();
+  const { users, loggedUser, createUser, deleteUser, adminChangePassword, editUserName } = useAuth();
   const [tab, setTab] = useState<Tab>("users");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [changePwdFor,  setChangePwdFor]  = useState<string | null>(null);
+  const [editNameFor,   setEditNameFor]   = useState<string | null>(null);
   const [newPwd,        setNewPwd]        = useState("");
+  const [newName,       setNewName]       = useState("");
   const [pwdMsg,        setPwdMsg]        = useState("");
   const [msg,           setMsg]           = useState("");
 
@@ -54,6 +56,18 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
       setTimeout(() => setPwdMsg(""), 3000);
     } else {
       setPwdMsg(res.error ?? "Error");
+    }
+  }
+
+  function handleEditName(username: string) {
+    const res = editUserName(username, newName);
+    if (res.ok) {
+      setMsg(`✅ Name updated for "${username}"`);
+      setNewName("");
+      setEditNameFor(null);
+      setTimeout(() => setMsg(""), 3000);
+    } else {
+      setMsg(res.error ?? "Error");
     }
   }
 
@@ -128,6 +142,35 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Edit name */}
+                      {editNameFor === u.username ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="New full name"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="border border-slate-200 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-purple-300"
+                          />
+                          <button onClick={() => handleEditName(u.username)}
+                            className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700">
+                            Save
+                          </button>
+                          <button onClick={() => { setEditNameFor(null); setNewName(""); }}
+                            className="px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs hover:bg-slate-300">
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditNameFor(u.username); setNewName(u.fullName); setChangePwdFor(null); }}
+                          className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-xs font-semibold hover:bg-purple-100 transition-colors"
+                          title="Edit name"
+                        >
+                          ✏️ Name
+                        </button>
+                      )}
+
                       {/* Change password */}
                       {changePwdFor === u.username ? (
                         <div className="flex items-center gap-2">

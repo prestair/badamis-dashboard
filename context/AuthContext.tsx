@@ -24,6 +24,7 @@ type AuthContextValue = {
   createUser:         (user: Omit<AppUser, "role"> & { role?: UserRole }) => { ok: boolean; error?: string };
   deleteUser:         (username: string) => { ok: boolean; error?: string };
   adminChangePassword:(username: string, newPass: string) => { ok: boolean; error?: string };
+  editUserName:       (username: string, newFullName: string) => { ok: boolean; error?: string };
 };
 
 // ── Default users ─────────────────────────────────────────────────────────────
@@ -106,11 +107,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
-  return (
+  // ── Admin: edit user fullName ──────────────────────────────────────────────
+  function editUserName(username: string, newFullName: string): { ok: boolean; error?: string } {
+    if (loggedRole !== "admin")   return { ok: false, error: "Admin access required." };
+    if (!newFullName.trim())      return { ok: false, error: "Name cannot be empty." };
+    const exists = users.find((u) => u.username === username);
+    if (!exists) return { ok: false, error: "User not found." };
+    setUsers((prev) => prev.map((u) => u.username === username ? { ...u, fullName: newFullName.trim() } : u));
+    return { ok: true };
+  }  return (
     <AuthContext.Provider value={{
       isLoggedIn, loggedUser, loggedRole, users,
       login, logout, changePassword,
-      createUser, deleteUser, adminChangePassword,
+      createUser, deleteUser, adminChangePassword, editUserName,
     }}>
       {children}
     </AuthContext.Provider>
