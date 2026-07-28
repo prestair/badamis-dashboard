@@ -101,6 +101,11 @@ export default function HeaderActions() {
                         className="px-2 py-0.5 rounded bg-blue-500/40 hover:bg-blue-500/70 text-white text-[10px] font-bold transition-all">
                         ✏️ Edit
                       </button>
+                      <button onClick={() => { setEditQuotation({...q, dbId: "", serialNo: 0, quotationNo: q.quotationNo + "-COPY"}); }}
+                        className="px-2 py-0.5 rounded bg-purple-500/40 hover:bg-purple-500/70 text-white text-[10px] font-bold transition-all"
+                        title="Duplicate this quotation">
+                        📋 Copy
+                      </button>
                       <button onClick={() => handleDelete(q.dbId)}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                           confirmDelete === q.dbId

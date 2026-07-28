@@ -41,3 +41,44 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Smooth transitions everywhere */
+* {
+  transition-property: background-color, border-color, color, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Slide up animation */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+/* Pulse glow for important items */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.3); }
+  50% { box-shadow: 0 0 12px 4px rgba(37, 99, 235, 0.15); }
+}
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Print styles */
+@media print {
+  header, footer, .no-print { display: none !important; }
+  body { background: white !important; }
+  .print-only { display: block !important; }
+}

@@ -5,6 +5,7 @@ import ChartsSection from "@/components/ChartsSection";
 import HeaderActions from "@/components/HeaderActions";
 import UserBar from "@/components/UserBar";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import DashboardToolbar from "@/components/DashboardToolbar";
 
 const TERMS = [
   { icon: "✅", label: "Rate validity", value: "10 days" },
@@ -70,6 +71,7 @@ export default function DashboardPage() {
 
           {/* Rows 2 & 3: Action buttons + number row (client — needs context) */}
           <HeaderActions />
+          <DashboardToolbar />
 
         </div>
       </header>
@@ -77,13 +79,19 @@ export default function DashboardPage() {
       <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
 
         {/* ── KPI CARDS ── */}
-        <KpiCards />
+        <div className="animate-fade-in">
+          <KpiCards />
+        </div>
 
         {/* ── CHARTS ── */}
-        <ChartsSection />
+        <div className="animate-slide-up" style={{animationDelay:"0.1s"}}>
+          <ChartsSection />
+        </div>
 
         {/* ── ITEM TABLE ── */}
-        <ItemTable />
+        <div className="animate-slide-up" style={{animationDelay:"0.2s"}}>
+          <ItemTable />
+        </div>
 
         {/* ── TERMS ── */}
         <div className="bg-white rounded-xl shadow-sm p-5">
