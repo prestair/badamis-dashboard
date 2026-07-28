@@ -320,7 +320,23 @@ async function downloadPDF(props: Props) {
   doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
 
   // ── Footer on last page ───────────────────────────────────────────────────
-  ty += 22;
+  // Logos row above signature
+  ty += 4;
+  if (ty + 30 > 270) { doc.addPage(); ty = 15; }
+
+  // Draw logos in a row at the bottom
+  let fLogoX = ML;
+  const fLogoY = ty;
+  ALL_LOGOS.forEach((logo) => {
+    try {
+      doc.addImage(logo.data, "PNG", fLogoX, fLogoY, logo.w, logo.h);
+    } catch {
+      // skip if not supported
+    }
+    fLogoX += logo.w + 3;
+  });
+
+  ty += 16;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(22, 40, 70);
