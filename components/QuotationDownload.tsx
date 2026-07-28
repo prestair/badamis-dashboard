@@ -343,61 +343,36 @@ async function downloadPDF(props: Props) {
   doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
 
   // ── Footer on last page ───────────────────────────────────────────────────
-  // Logos row above signature — drawn as text badges (jsPDF can't render SVG reliably)
+  // Logos row above signature — load PNG images from public folder
   ty += 4;
   if (ty + 30 > 270) { doc.addPage(); ty = 15; }
 
   const badgeRow = ty + 2;
 
-  // Helper: draw circular badge
-  function drawCircleBadge(cx: number, cy: number, r: number, bgColor: [number,number,number], label: string, txtColor: [number,number,number], fs: number) {
-    doc.setFillColor(...bgColor);
-    doc.circle(cx, cy, r, "F");
-    doc.setDrawColor(180, 180, 180);
-    doc.circle(cx, cy, r, "S");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(fs);
-    doc.setTextColor(...txtColor);
-    doc.text(label, cx, cy + fs * 0.3, { align: "center" });
-  }
+  // Load logos as PNG from public folder and embed
+  const logoFiles = ["gacb", "ce", "iaf", "qcs", "iso", "uaf"];
+  const logoWidths  = [10, 12, 14, 14, 10, 16];
+  const logoHeights = [10, 8, 10, 10, 10, 8];
 
-  // Helper: draw rectangular badge
-  function drawRectBadge(x: number, y: number, w: number, h: number, bgColor: [number,number,number], lines: {text:string; fs:number; color:[number,number,number]}[]) {
-    doc.setFillColor(...bgColor);
-    doc.roundedRect(x, y, w, h, 1, 1, "F");
-    doc.setDrawColor(180, 180, 180);
-    doc.roundedRect(x, y, w, h, 1, 1, "S");
-    let ly = y + 3.5;
-    lines.forEach((l) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(l.fs);
-      doc.setTextColor(...l.color);
-      doc.text(l.text, x + w / 2, ly, { align: "center" });
-      ly += l.fs * 0.5 + 1.5;
-    });
+  let lx = ML;
+  for (let i = 0; i < logoFiles.length; i++) {
+    try {
+      const imgUrl = `${window.location.origin}/logos/${logoFiles[i]}.png`;
+      const response = await fetch(imgUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        doc.addImage(dataUrl, "PNG", lx, badgeRow, logoWidths[i], logoHeights[i]);
+      }
+    } catch {
+      // skip if image not found
+    }
+    lx += logoWidths[i] + 3;
   }
-
-  // GACB
-  drawCircleBadge(ML + 5, badgeRow + 5, 5, [196, 30, 58], "GACB", [255, 255, 255], 4);
-  // CE
-  drawRectBadge(ML + 13, badgeRow, 12, 10, [255, 255, 255], [{ text: "CE", fs: 8, color: [20, 20, 20] }]);
-  // IAF
-  drawCircleBadge(ML + 33, badgeRow + 5, 5, [43, 93, 166], "IAF", [255, 255, 255], 5);
-  // QCS
-  drawRectBadge(ML + 41, badgeRow, 16, 10, [255, 255, 255], [
-    { text: "QCS", fs: 6, color: [26, 79, 139] },
-    { text: "CERTIFIED", fs: 3.5, color: [46, 139, 87] },
-  ]);
-  // ISO 9001:2015
-  drawRectBadge(ML + 60, badgeRow, 16, 10, [255, 255, 255], [
-    { text: "ISO", fs: 6, color: [26, 79, 139] },
-    { text: "9001:2015", fs: 3.5, color: [26, 79, 139] },
-  ]);
-  // UAF
-  drawRectBadge(ML + 79, badgeRow, 18, 10, [255, 255, 255], [
-    { text: "UAF", fs: 6, color: [20, 20, 20] },
-    { text: "Accredited", fs: 3.5, color: [79, 179, 217] },
-  ]);
 
   ty += 16;
   doc.setFont("helvetica", "bold");
