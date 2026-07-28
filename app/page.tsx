@@ -28,25 +28,23 @@ export default function DashboardPage() {
           {/* Row 1: Company logo (top-left) + Center title + User (top-right) */}
           <div className="flex items-center justify-between py-4 border-b border-white/10">
 
-            {/* Left: Prestair Logo + Company name + Certification logos side by side */}
+            {/* Left: Prestair Logo + text below + Certification logos */}
             <div className="flex-1 flex items-center gap-4">
-              {/* Prestair Logo Image */}
-              <div className="flex items-center gap-3">
-                <img src="/logos/prestair-logo.svg" alt="Prestair Systems LLP" className="h-12 w-auto" />
-                <div className="border-l border-white/20 pl-3">
-                  <span className="text-[9px] text-blue-200 uppercase tracking-widest block">
-                    Commercial Food Service Equipments
-                  </span>
-                  <span className="text-[9px] text-blue-300 block mt-0.5">Since 1982</span>
-                </div>
+              {/* Prestair Logo with text below */}
+              <div className="flex flex-col items-start">
+                <img src="/logos/prestair-logo.svg" alt="Prestair Systems LLP" className="h-10 w-auto" />
+                <span className="text-[8px] text-blue-200 uppercase tracking-widest mt-1">
+                  Commercial Food Service Equipments
+                </span>
+                <span className="text-[8px] text-blue-300">Since 1982</span>
               </div>
 
-              {/* Certification Badges — side by side */}
-              <div className="flex items-center gap-1.5 ml-3">
-                <img src="/logos/gacb.svg" alt="GACB" className="h-6 w-6 rounded-full bg-white p-0.5" title="Global Accreditation Certification Board" />
+              {/* Certification Badges — side */}
+              <div className="flex items-center gap-1.5 ml-2">
+                <img src="/logos/gacb.svg" alt="GACB" className="h-6 w-6 rounded-full bg-white p-0.5" title="GACB" />
                 <img src="/logos/ce.svg" alt="CE" className="h-5 w-8 bg-white rounded px-1" title="CE Mark" />
                 <img src="/logos/iaf.svg" alt="IAF" className="h-6 w-9 rounded" title="IAF" />
-                <img src="/logos/qcs.svg" alt="QCS" className="h-6 w-9 rounded bg-white p-0.5" title="QCS Certified" />
+                <img src="/logos/qcs.svg" alt="QCS" className="h-6 w-9 rounded bg-white p-0.5" title="QCS" />
                 <img src="/logos/iso.svg" alt="ISO" className="h-6 w-6 bg-white rounded p-0.5" title="ISO 9001:2015" />
                 <img src="/logos/uaf.svg" alt="UAF" className="h-5 w-10 rounded bg-white" title="UAF" />
               </div>
