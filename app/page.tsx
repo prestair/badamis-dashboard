@@ -47,13 +47,13 @@ export default function DashboardPage() {
               </div>
 
               {/* Certification Badges — actual logo images */}
-              <div className="flex items-center gap-2 ml-4 flex-wrap">
-                <img src="/logos/gacb.svg" alt="GACB" className="h-9 w-9 rounded-full" title="Global Accreditation Certification Board" />
-                <img src="/logos/ce.svg" alt="CE" className="h-7 bg-white rounded px-1" title="CE Mark" />
-                <img src="/logos/iaf.svg" alt="IAF" className="h-8 rounded" title="IAF - Member of Multilateral Recognition Arrangement" />
-                <img src="/logos/qcs.svg" alt="QCS" className="h-8 rounded" title="QCS Certified - ISO 14001:2015" />
-                <img src="/logos/iso.svg" alt="ISO" className="h-9 bg-white rounded p-0.5" title="ISO 9001:2015" />
-                <img src="/logos/uaf.svg" alt="UAF" className="h-7 rounded" title="United Accreditation Foundation" />
+              <div className="flex items-center gap-3 ml-6">
+                <img src="/logos/gacb.svg" alt="GACB" className="h-10 w-10 rounded-full bg-white p-0.5 shadow-sm" title="Global Accreditation Certification Board" />
+                <img src="/logos/ce.svg" alt="CE" className="h-8 w-12 bg-white rounded-md px-1.5 py-0.5 shadow-sm" title="CE Mark" />
+                <img src="/logos/iaf.svg" alt="IAF" className="h-9 w-14 rounded-md shadow-sm" title="IAF - Member of Multilateral Recognition Arrangement" />
+                <img src="/logos/qcs.svg" alt="QCS" className="h-9 w-14 rounded-md bg-white p-0.5 shadow-sm" title="QCS Certified - ISO 14001:2015" />
+                <img src="/logos/iso.svg" alt="ISO" className="h-10 w-10 bg-white rounded-md p-0.5 shadow-sm" title="ISO 9001:2015" />
+                <img src="/logos/uaf.svg" alt="UAF" className="h-8 w-16 rounded-md bg-white shadow-sm" title="United Accreditation Foundation" />
               </div>
             </div>
 
