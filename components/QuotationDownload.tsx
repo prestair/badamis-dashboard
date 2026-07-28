@@ -20,9 +20,24 @@ type Props = {
 type RowData = {
   slNo: string; itemCode: string; desc: string; size: string;
   hsn: string; qty: string; discount: string; rate: string; amt: number | null;
+  section?: string;
 };
 
 const fmtNum = (n: number) => n.toLocaleString("en-IN");
+
+// Detect section from item code prefix
+function detectSection(itemCode: string): string {
+  const code = (itemCode || "").toUpperCase();
+  if (code.startsWith("DC")) return "DISPLAY COUNTER";
+  if (code.startsWith("BC")) return "BACK COUNTER (DISPLAY SECTION)";
+  if (code.startsWith("MI")) return "MITHAI COORDINATION - ROOM";
+  if (code.startsWith("SC")) return "SERVICE COUNTER";
+  if (code.startsWith("MK")) return "MAIN KITCHEN";
+  if (code.startsWith("CR")) return "COLD ROOM";
+  if (code.startsWith("DW")) return "DISH WASH SECTION";
+  if (code.startsWith("EX")) return "EXHAUST HOOD";
+  return "";
+}
 
 const TERMS = [
   "1. Rates: - valid for 10 days.",
@@ -215,17 +230,36 @@ async function downloadPDF(props: Props) {
     startY: y,
     margin: { left: ML, right: ML },
     head: [["#", "Item Code", "Description", "Size", "HSN", "Qty", "Disc (₹)", "Rate (₹)", "Amount (₹)"]],
-    body: props.rows.map((r, i) => [
-      String(i + 1),
-      r.itemCode || "—",
-      r.desc     || "—",
-      r.size     || "—",
-      r.hsn      || "—",
-      r.qty      || "1",
-      r.discount || "0",
-      r.rate     || "NQ",
-      r.amt !== null ? fmtNum(r.amt) : "NQ",
-    ]),
+    body: (() => {
+      // Build body with section headers
+      const tableBody: (string | { content: string; colSpan: number; styles: object })[][] = [];
+      let lastSection = "";
+      props.rows.forEach((r, i) => {
+        // Detect section from item code prefix or section field
+        const section = r.section || detectSection(r.itemCode);
+        if (section && section !== lastSection) {
+          // Add section header row
+          tableBody.push([{
+            content: section.toUpperCase(),
+            colSpan: 9,
+            styles: { fillColor: [230, 240, 255], textColor: [22, 40, 70], fontStyle: "bold" as const, fontSize: 7, halign: "left" as const },
+          }] as unknown as string[]);
+          lastSection = section;
+        }
+        tableBody.push([
+          String(i + 1),
+          r.itemCode || "\u2014",
+          r.desc     || "\u2014",
+          r.size     || "\u2014",
+          r.hsn      || "\u2014",
+          r.qty      || "1",
+          r.discount || "0",
+          r.rate     || "NQ",
+          r.amt !== null ? fmtNum(r.amt) : "NQ",
+        ]);
+      });
+      return tableBody;
+    })(),
     headStyles: {
       fillColor:   [22, 40, 70],
       textColor:   [255, 255, 255],
