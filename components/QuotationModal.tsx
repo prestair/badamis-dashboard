@@ -8,6 +8,15 @@ const QuotationDownload = dynamic(() => import("@/components/QuotationDownload")
 
 const today = new Date().toISOString().split("T")[0];
 
+// Generate quotation number based on count
+function generateQuotationNo(count: number): string {
+  const now = new Date();
+  const year = now.getFullYear() % 100; // 26
+  const nextYear = year + 1; // 27
+  const num = String(count + 1).padStart(4, "0");
+  return `PS/${year}-${nextYear}/QT-${num}`;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 type ItemRow = {
   uid:      string; // unique key for React
@@ -46,7 +55,7 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
 }
 
 export default function QuotationModal({ onClose, initialData }: Props) {
-  const { saveQuotation, updateQuotation } = useQuotations();
+  const { saveQuotation, updateQuotation, totalCount } = useQuotations();
   const isEdit = !!initialData;
 
   // ── Step state ────────────────────────────────────────────────────────────
@@ -58,7 +67,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   const [partyAddress, setPartyAddress] = useState(initialData?.partyAddress ?? "");
   const [partyGST,     setPartyGST]     = useState(initialData?.partyGST    ?? "");
   const [attention,    setAttention]    = useState(initialData?.attention    ?? "");
-  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo  ?? "PS/25-26/QT-");
+  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo  ?? generateQuotationNo(totalCount));
   const [subject,      setSubject]      = useState(
     initialData?.subject ??
     "QUOTATION FOR DISPLAY WITH SERVICES COUNTER & KITCHEN EQUIPMENT - AT BADAMI'S SWEETS-SAYA SOUTH EX NOIDA"
