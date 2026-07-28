@@ -343,19 +343,21 @@ async function downloadPDF(props: Props) {
   doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
 
   // ── Footer on last page ───────────────────────────────────────────────────
-  // Signature
-  ty += 8;
-  if (ty + 10 > 260) { doc.addPage(); ty = 15; }
+  // Get last page
+  const lastPage = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+  doc.setPage(lastPage);
+
+  // "For Prestair Systems LLP" + "Authorised Signatory" — fixed position
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setTextColor(22, 40, 70);
-  doc.text("For Prestair Systems LLP", MR, ty, { align: "right" });
+  doc.text("For Prestair Systems LLP", MR, 252, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(100, 110, 130);
-  doc.text("Authorised Signatory", MR, ty + 6, { align: "right" });
+  doc.text("Authorised Signatory", MR, 258, { align: "right" });
 
-  // Logos row — FIXED at very bottom of last page (Y = 275)
+  // Logos row — fixed at Y = 268, centered horizontally
   const logoConfigs = [
     { file: "gacb.png",  fmt: "PNG",  w: 10, h: 10 },
     { file: "ce.jpg",    fmt: "JPEG", w: 12, h: 8  },
@@ -363,14 +365,11 @@ async function downloadPDF(props: Props) {
     { file: "iso.png",   fmt: "PNG",  w: 10, h: 10 },
   ];
 
-  const lastPage = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
-  doc.setPage(lastPage);
-
-  const logoFixedY = 275; // very bottom — just above page footer line
+  const logoFixedY = 268;
   const totalLogoWidth = logoConfigs.reduce((s, l) => s + l.w, 0) + (logoConfigs.length - 1) * 5;
-  let lx = (W - totalLogoWidth) / 2; // horizontally centered
+  let lx = (W - totalLogoWidth) / 2;
 
-  // Separator line
+  // Separator line above logos
   doc.setDrawColor(200, 215, 240);
   doc.line(ML, logoFixedY - 2, MR, logoFixedY - 2);
 
