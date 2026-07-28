@@ -166,7 +166,9 @@ async function downloadPDF(props: Props) {
     { file: "gacb.png", fmt: "PNG",  w: 10, h: 10 },
     { file: "ce.jpg",   fmt: "JPEG", w: 12, h: 8  },
     { file: "iaf.png",  fmt: "PNG",  w: 14, h: 10 },
+    { file: "qcs.png",  fmt: "PNG",  w: 14, h: 10 },
     { file: "iso.png",  fmt: "PNG",  w: 10, h: 10 },
+    { file: "uaf.png",  fmt: "PNG",  w: 16, h: 8  },
   ];
 
   // Pre-load all logos
