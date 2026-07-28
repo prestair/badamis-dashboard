@@ -96,9 +96,9 @@ async function downloadPDF(props: Props) {
 
   // ── Page header (full-width dark band) ───────────────────────────────────
   doc.setFillColor(22, 40, 70);
-  doc.rect(0, 0, W, 28, "F");
+  doc.rect(0, 0, W, 30, "F");
 
-  // Prestair Logo — stylized text
+  // Prestair Logo — stylized text (left)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
@@ -107,68 +107,42 @@ async function downloadPDF(props: Props) {
   doc.setFontSize(9);
   doc.setTextColor(160, 190, 230);
   doc.text("Systems LLP", ML, 17);
-  // underline
   doc.setDrawColor(100, 140, 200);
   doc.line(ML, 18.5, ML + 32, 18.5);
   doc.setFontSize(6);
   doc.setTextColor(140, 170, 220);
-  doc.text("Commercial Food Service Equipments", ML, 22);
-  doc.text("Since 1982", ML, 26);
+  doc.text("Commercial Food Service Equipments  |  Since 1982", ML, 22);
 
-  // ── Certification Badges (right side of header) ──────────────────────────
-  const badgeY = 6;
-  const badgeR = MR; // right edge
+  // ── Certification Logo Images (center of header) ──────────────────────────
+  const { ALL_LOGOS } = await import("@/lib/pdfLogos");
+  let logoX = 68;
+  const logoY = 4;
+  ALL_LOGOS.forEach((logo) => {
+    try {
+      doc.addImage(logo.data, "PNG", logoX, logoY, logo.w, logo.h);
+    } catch {
+      // SVG addImage may not work in all envs — silently skip
+    }
+    logoX += logo.w + 1.5;
+  });
 
-  // Helper: draw a circular badge
-  function drawBadge(x: number, y: number, r: number, bg: [number,number,number], text: string, textColor: [number,number,number], fontSize: number) {
-    doc.setFillColor(...bg);
-    doc.circle(x, y, r, "F");
-    doc.setDrawColor(200, 210, 230);
-    doc.circle(x, y, r, "S");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(fontSize);
-    doc.setTextColor(...textColor);
-    doc.text(text, x, y + fontSize * 0.35, { align: "center" });
-  }
-
-  // CE Mark
-  drawBadge(badgeR - 4,  badgeY + 4, 4, [255,255,255], "CE", [22,40,70], 5.5);
-  // QCS
-  drawBadge(badgeR - 13, badgeY + 4, 4, [255,255,255], "QCS", [22,40,70], 4.5);
-  // IAF
-  drawBadge(badgeR - 22, badgeY + 4, 4, [255,255,255], "IAF", [22,40,70], 4.5);
-
-  // ISO 9001:2015 — rectangular badge
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(badgeR - 40, badgeY, 12, 8, 1, 1, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5);
-  doc.setTextColor(22, 40, 70);
-  doc.text("ISO", badgeR - 34, badgeY + 3.5, { align: "center" });
-  doc.setFontSize(4);
-  doc.text("9001:2015", badgeR - 34, badgeY + 6.5, { align: "center" });
-
-  // UAF badge
-  drawBadge(badgeR - 49, badgeY + 4, 4, [200, 160, 50], "UAF", [255,255,255], 4.5);
-
-  // Company info (center of header)
+  // Company info bottom line
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(6.5);
   doc.setTextColor(180, 200, 240);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", 105, 20, { align: "center" });
-  doc.text("GST: 09AATFP8342B1ZX  |  ISO 9001:2015 Certified", 105, 25, { align: "center" });
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305  |  GST: 09AATFP8342B1ZX", ML, 27);
 
-  // Quotation No + Date (right of header, below badges)
+  // Quotation No + Date (right)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(200, 220, 255);
-  doc.text(`Quotation: ${props.quotationNo || "—"}`, MR, 20, { align: "right" });
+  doc.text(`Quotation: ${props.quotationNo || "\u2014"}`, MR, 22, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text(`Date: ${props.date}`, MR, 25, { align: "right" });
+  doc.text(`Date: ${props.date}`, MR, 27, { align: "right" });
 
   // ── Party info box ───────────────────────────────────────────────────────
-  let y = 34;
+  let y = 36;
   doc.setFillColor(246, 249, 255);
   doc.roundedRect(ML, y, CW, 22, 2, 2, "F");
   doc.setDrawColor(200, 210, 230);
