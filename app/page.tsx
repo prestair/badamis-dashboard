@@ -58,7 +58,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Center: Main title */}
-            <h1 className="text-2xl font-bold tracking-wide text-center whitespace-nowrap">
+            <h1 className="text-lg font-bold tracking-wide text-center whitespace-nowrap">
               Quotation Dashboard Report
             </h1>
 
