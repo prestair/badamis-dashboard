@@ -343,41 +343,9 @@ async function downloadPDF(props: Props) {
   doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
 
   // ── Footer on last page ───────────────────────────────────────────────────
-  // Logos row above signature — load actual images from public folder
-  ty += 4;
-  if (ty + 30 > 270) { doc.addPage(); ty = 15; }
-
-  const badgeRow = ty + 2;
-
-  // Logo files with format (jsPDF supports PNG and JPEG)
-  const logoConfigs = [
-    { file: "gacb.png",  fmt: "PNG",  w: 12, h: 12 },
-    { file: "ce.jpg",    fmt: "JPEG", w: 14, h: 9  },
-    { file: "iaf.png",   fmt: "PNG",  w: 16, h: 11 },
-    { file: "iso.png",   fmt: "PNG",  w: 12, h: 12 },
-  ];
-
-  let lx = ML;
-  for (const logo of logoConfigs) {
-    try {
-      const imgUrl = `/logos/${logo.file}`;
-      const response = await fetch(imgUrl);
-      if (response.ok) {
-        const blob = await response.blob();
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-        doc.addImage(dataUrl, logo.fmt, lx, badgeRow, logo.w, logo.h);
-      }
-    } catch {
-      // skip if image not available
-    }
-    lx += logo.w + 4;
-  }
-
-  ty += 18;
+  // Signature
+  ty += 8;
+  if (ty + 10 > 260) { doc.addPage(); ty = 15; }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(22, 40, 70);
@@ -386,6 +354,41 @@ async function downloadPDF(props: Props) {
   doc.setFontSize(7);
   doc.setTextColor(100, 110, 130);
   doc.text("Authorised Signatory", MR, ty + 6, { align: "right" });
+
+  // Logos row — FIXED at very bottom of last page (Y = 275)
+  const logoConfigs = [
+    { file: "gacb.png",  fmt: "PNG",  w: 10, h: 10 },
+    { file: "ce.jpg",    fmt: "JPEG", w: 12, h: 8  },
+    { file: "iaf.png",   fmt: "PNG",  w: 14, h: 10 },
+    { file: "iso.png",   fmt: "PNG",  w: 10, h: 10 },
+  ];
+
+  const lastPage = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+  doc.setPage(lastPage);
+
+  const logoFixedY = 275; // very bottom — just above page footer line
+  const totalLogoWidth = logoConfigs.reduce((s, l) => s + l.w, 0) + (logoConfigs.length - 1) * 5;
+  let lx = (W - totalLogoWidth) / 2; // horizontally centered
+
+  // Separator line
+  doc.setDrawColor(200, 215, 240);
+  doc.line(ML, logoFixedY - 2, MR, logoFixedY - 2);
+
+  for (const logo of logoConfigs) {
+    try {
+      const response = await fetch(`/logos/${logo.file}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        doc.addImage(dataUrl, logo.fmt, lx, logoFixedY, logo.w, logo.h);
+      }
+    } catch { /* skip */ }
+    lx += logo.w + 5;
+  }
 
   // Page footer line on every page
   const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
