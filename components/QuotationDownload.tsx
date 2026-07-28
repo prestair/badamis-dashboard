@@ -148,41 +148,39 @@ async function downloadPDF(props: Props) {
   doc.setTextColor(140, 170, 220);
   doc.text("Commercial Food Service Equipments  |  Since 1982", ML, 22);
 
-  // ── Certification Badges (drawn as shapes — jsPDF can't render SVG images) ──
-  const hbY = 5;
-  doc.setFillColor(196, 30, 58);
-  doc.circle(72, hbY + 5, 4.5, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(4); doc.setTextColor(255,255,255);
-  doc.text("GACB", 72, hbY + 6.5, { align: "center" });
+  // ── Logo images helper (used both header & footer) ──────────────────────────
+  async function loadLogoDataUrl(file: string): Promise<string | null> {
+    try {
+      const response = await fetch(`/logos/${file}`);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
 
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(79, hbY + 1, 10, 8, 1, 1, "F");
-  doc.setFontSize(7); doc.setTextColor(20,20,20);
-  doc.text("CE", 84, hbY + 6.5, { align: "center" });
+  const logoList = [
+    { file: "gacb.png", fmt: "PNG",  w: 10, h: 10 },
+    { file: "ce.jpg",   fmt: "JPEG", w: 12, h: 8  },
+    { file: "iaf.png",  fmt: "PNG",  w: 14, h: 10 },
+    { file: "iso.png",  fmt: "PNG",  w: 10, h: 10 },
+  ];
 
-  doc.setFillColor(43, 93, 166);
-  doc.circle(96, hbY + 5, 4.5, "F");
-  doc.setFontSize(4.5); doc.setTextColor(255,255,255);
-  doc.text("IAF", 96, hbY + 6.5, { align: "center" });
+  // Pre-load all logos
+  const logoData: (string | null)[] = [];
+  for (const l of logoList) { logoData.push(await loadLogoDataUrl(l.file)); }
 
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(103, hbY + 1, 14, 8, 1, 1, "F");
-  doc.setFontSize(5); doc.setTextColor(26,79,139);
-  doc.text("QCS", 110, hbY + 5, { align: "center" });
-  doc.setFontSize(3); doc.setTextColor(46,139,87);
-  doc.text("CERTIFIED", 110, hbY + 8, { align: "center" });
-
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(120, hbY + 1, 14, 8, 1, 1, "F");
-  doc.setFontSize(5); doc.setTextColor(26,79,139);
-  doc.text("ISO", 127, hbY + 5, { align: "center" });
-  doc.setFontSize(3);
-  doc.text("9001:2015", 127, hbY + 8, { align: "center" });
-
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(137, hbY + 1, 14, 8, 1, 1, "F");
-  doc.setFontSize(5); doc.setTextColor(20,20,20);
-  doc.text("UAF", 144, hbY + 6, { align: "center" });
+  // ── Header logos (top-right area) ─────────────────────────────────────────
+  let hlx = 130;
+  for (let i = 0; i < logoList.length; i++) {
+    if (logoData[i]) {
+      doc.addImage(logoData[i]!, logoList[i].fmt, hlx, 6, logoList[i].w, logoList[i].h);
+    }
+    hlx += logoList[i].w + 3;
+  }
 
   // Company info bottom line
   doc.setFont("helvetica", "normal");
@@ -411,36 +409,20 @@ async function downloadPDF(props: Props) {
   doc.setTextColor(100, 110, 130);
   doc.text("Authorised Signatory", MR, 258, { align: "right" });
 
-  // Logos row — fixed at Y = 268, centered horizontally
-  const logoConfigs = [
-    { file: "gacb.png",  fmt: "PNG",  w: 10, h: 10 },
-    { file: "ce.jpg",    fmt: "JPEG", w: 12, h: 8  },
-    { file: "iaf.png",   fmt: "PNG",  w: 14, h: 10 },
-    { file: "iso.png",   fmt: "PNG",  w: 10, h: 10 },
-  ];
-
+  // ── Footer logos (bottom, centered) ─────────────────────────────────────────
+  const logoConfigs = logoList;
   const logoFixedY = 268;
   const totalLogoWidth = logoConfigs.reduce((s, l) => s + l.w, 0) + (logoConfigs.length - 1) * 5;
   let lx = (W - totalLogoWidth) / 2;
 
-  // Separator line above logos
   doc.setDrawColor(200, 215, 240);
   doc.line(ML, logoFixedY - 2, MR, logoFixedY - 2);
 
-  for (const logo of logoConfigs) {
-    try {
-      const response = await fetch(`/logos/${logo.file}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-        doc.addImage(dataUrl, logo.fmt, lx, logoFixedY, logo.w, logo.h);
-      }
-    } catch { /* skip */ }
-    lx += logo.w + 5;
+  for (let i = 0; i < logoConfigs.length; i++) {
+    if (logoData[i]) {
+      doc.addImage(logoData[i]!, logoConfigs[i].fmt, lx, logoFixedY, logoConfigs[i].w, logoConfigs[i].h);
+    }
+    lx += logoConfigs[i].w + 5;
   }
 
   // Page footer line on every page
