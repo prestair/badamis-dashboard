@@ -46,29 +46,14 @@ export default function DashboardPage() {
                 <span className="text-[9px] text-blue-200 mt-0.5">Since 1982</span>
               </div>
 
-              {/* Certification Badges */}
-              <div className="flex items-center gap-1.5 ml-4 flex-wrap">
-                {/* CE Mark */}
-                <div className="w-7 h-7 rounded-full bg-white/15 border border-white/30 flex items-center justify-center" title="CE Mark">
-                  <span className="text-[9px] font-black text-white">CE</span>
-                </div>
-                {/* QCS */}
-                <div className="w-7 h-7 rounded-full bg-white/15 border border-white/30 flex items-center justify-center" title="QCS Certified">
-                  <span className="text-[7px] font-black text-white">QCS</span>
-                </div>
-                {/* IAF */}
-                <div className="w-7 h-7 rounded-full bg-white/15 border border-white/30 flex items-center justify-center" title="IAF Accredited">
-                  <span className="text-[8px] font-black text-white">IAF</span>
-                </div>
-                {/* ISO */}
-                <div className="px-1.5 py-0.5 rounded bg-white/15 border border-white/30 flex flex-col items-center" title="ISO 9001:2015">
-                  <span className="text-[7px] font-black text-white leading-none">ISO</span>
-                  <span className="text-[6px] text-blue-200 leading-none">9001:2015</span>
-                </div>
-                {/* UIAF badge */}
-                <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center" title="Accredited">
-                  <span className="text-[7px] font-black text-amber-200">UAF</span>
-                </div>
+              {/* Certification Badges — actual logo images */}
+              <div className="flex items-center gap-2 ml-4 flex-wrap">
+                <img src="/logos/gacb.svg" alt="GACB" className="h-9 w-9 rounded-full" title="Global Accreditation Certification Board" />
+                <img src="/logos/ce.svg" alt="CE" className="h-7 bg-white rounded px-1" title="CE Mark" />
+                <img src="/logos/iaf.svg" alt="IAF" className="h-8 rounded" title="IAF - Member of Multilateral Recognition Arrangement" />
+                <img src="/logos/qcs.svg" alt="QCS" className="h-8 rounded" title="QCS Certified - ISO 14001:2015" />
+                <img src="/logos/iso.svg" alt="ISO" className="h-9 bg-white rounded p-0.5" title="ISO 9001:2015" />
+                <img src="/logos/uaf.svg" alt="UAF" className="h-7 rounded" title="United Accreditation Foundation" />
               </div>
             </div>
 

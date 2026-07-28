@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Circle -->
+  <circle cx="50" cy="50" r="46" fill="#c41e3a" stroke="#d4a533" stroke-width="4"/>
+  <!-- Inner circle -->
+  <circle cx="50" cy="50" r="36" fill="white"/>
+  <!-- Star -->
+  <polygon points="50,22 54,36 68,36 56,44 60,58 50,50 40,58 44,44 32,36 46,36" fill="#1a4f8b"/>
+  <!-- GACB text -->
+  <text x="50" y="78" font-family="Arial" font-weight="bold" font-size="14" fill="#1a4f8b" text-anchor="middle">GACB</text>
+  <!-- Circular text top -->
+  <text x="50" y="12" font-family="Arial" font-weight="bold" font-size="6" fill="#d4a533" text-anchor="middle">GLOBAL ACCREDITATION</text>
+  <!-- Circular text bottom -->
+  <text x="50" y="96" font-family="Arial" font-weight="bold" font-size="6" fill="#d4a533" text-anchor="middle">CERTIFICATION BOARD</text>
+</svg>

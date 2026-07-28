@@ -110,15 +110,15 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   }
 
   // ── Live totals ────────────────────────────────────────────────────────────
-  const gross = useMemo(
-    () => itemRows.reduce((s, r) => s + (rowAmt(r) ?? 0), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [itemRows]
-  );
-  const overallDisc  = Math.max(0, Number(overallDiscount) || 0);
-  const afterDiscount = Math.max(0, gross - overallDisc);
-  const gst           = Math.round(afterDiscount * 0.18);
-  const grandTotal    = afterDiscount + gst;
+  const { gross, overallDisc, afterDiscount, gst, grandTotal } = useMemo(() => {
+    const gross        = itemRows.reduce((s, r) => s + (rowAmt(r) ?? 0), 0);
+    const overallDisc  = Math.max(0, Number(overallDiscount) || 0);
+    const afterDiscount = Math.max(0, gross - overallDisc);
+    const gst           = Math.round(afterDiscount * 0.18);
+    const grandTotal    = afterDiscount + gst;
+    return { gross, overallDisc, afterDiscount, gst, grandTotal };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemRows, overallDiscount]);
 
   const fmt = (n: number) => n.toLocaleString("en-IN");
 

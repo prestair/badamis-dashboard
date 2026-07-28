@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 100">
+  <!-- Oval background -->
+  <ellipse cx="70" cy="50" rx="68" ry="48" fill="#2b5da6"/>
+  <ellipse cx="70" cy="50" rx="64" ry="44" fill="none" stroke="#ffffff" stroke-width="1.5"/>
+  <!-- Text: MEMBER OF MULTILATERAL -->
+  <text x="70" y="22" font-family="Arial" font-size="8" fill="white" text-anchor="middle" font-weight="bold">MEMBER OF MULTILATERAL</text>
+  <!-- IAF text -->
+  <text x="70" y="60" font-family="Arial" font-weight="bold" font-size="30" fill="white" text-anchor="middle">IAF</text>
+  <!-- RECOGNITION ARRANGEMENT -->
+  <text x="70" y="85" font-family="Arial" font-size="8" fill="white" text-anchor="middle" font-weight="bold">RECOGNITION ARRANGEMENT</text>
+  <!-- Globe lines -->
+  <ellipse cx="70" cy="48" rx="30" ry="20" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/>
+</svg>

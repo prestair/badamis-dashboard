@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 100">
+  <!-- Outer oval -->
+  <ellipse cx="70" cy="50" rx="68" ry="48" fill="none" stroke="#2e8b57" stroke-width="3"/>
+  <!-- ISO 14001:2015 text top -->
+  <text x="70" y="22" font-family="Arial" font-weight="bold" font-size="11" fill="#1a4f8b" text-anchor="middle">ISO 14001:2015</text>
+  <!-- QCS text -->
+  <text x="60" y="58" font-family="Arial" font-weight="bold" font-size="24" fill="#1a4f8b" text-anchor="middle">QCS</text>
+  <!-- Swirl (simplified) -->
+  <path d="M 80 35 Q 105 50 80 65" fill="none" stroke="#2e8b57" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 85 38 Q 100 50 85 62" fill="none" stroke="#4fb3d9" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- CERTIFIED -->
+  <text x="70" y="78" font-family="Arial" font-weight="bold" font-size="12" fill="#1a4f8b" text-anchor="middle">CERTIFIED</text>
+</svg>
