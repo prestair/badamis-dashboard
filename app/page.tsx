@@ -4,6 +4,7 @@ import ItemTable from "@/components/ItemTable";
 import ChartsSection from "@/components/ChartsSection";
 import HeaderActions from "@/components/HeaderActions";
 import UserBar from "@/components/UserBar";
+import HamburgerMenu from "@/components/HamburgerMenu";
 
 const TERMS = [
   { icon: "✅", label: "Rate validity", value: "10 days" },
@@ -62,11 +63,14 @@ export default function DashboardPage() {
               Quotation Dashboard Report
             </h1>
 
-            {/* Right: GST + User & Logout */}
+            {/* Right: GST + User & Logout + Hamburger */}
             <div className="flex-1 flex flex-col items-end gap-2">
-              <div className="text-right">
-                <p className="text-xs text-blue-200">GST: {QUOTATION_META.vendorGST}</p>
-                <p className="text-[10px] text-blue-300">B-127 Phase-2, Noida, UP 201305</p>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-xs text-blue-200">GST: {QUOTATION_META.vendorGST}</p>
+                  <p className="text-[10px] text-blue-300">B-127 Phase-2, Noida, UP 201305</p>
+                </div>
+                <HamburgerMenu />
               </div>
               <UserBar />
             </div>
