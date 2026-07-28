@@ -28,26 +28,20 @@ export default function DashboardPage() {
           {/* Row 1: Company logo (top-left) + Center title + User (top-right) */}
           <div className="flex items-center justify-between py-4 border-b border-white/10">
 
-            {/* Left: Prestair Logo + Company name */}
-            <div className="flex-1 flex items-center gap-3">
-              {/* Prestair Logo SVG */}
-              <div className="flex flex-col items-start">
-                <div className="flex items-end gap-1 leading-none">
-                  <span className="text-2xl font-black italic tracking-tight text-white" style={{fontFamily:'serif'}}>
-                    Prestair
+            {/* Left: Prestair Logo + Company name + Certification logos side by side */}
+            <div className="flex-1 flex items-center gap-4">
+              {/* Prestair Logo Image */}
+              <div className="flex items-center gap-3">
+                <img src="/logos/prestair-logo.svg" alt="Prestair Systems LLP" className="h-12 w-auto" />
+                <div className="border-l border-white/20 pl-3">
+                  <span className="text-[9px] text-blue-200 uppercase tracking-widest block">
+                    Commercial Food Service Equipments
                   </span>
+                  <span className="text-[9px] text-blue-300 block mt-0.5">Since 1982</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold text-blue-200 italic tracking-widest">Systems LLP</span>
-                  <div className="w-6 h-px bg-blue-300 ml-1" />
-                </div>
-                <span className="text-[9px] text-blue-300 uppercase tracking-widest mt-0.5">
-                  Commercial Food Service Equipments
-                </span>
-                <span className="text-[9px] text-blue-200 mt-0.5">Since 1982</span>
               </div>
 
-              {/* Certification Badges — actual logo images */}
+              {/* Certification Badges — side by side */}
               <div className="flex items-center gap-1.5 ml-3">
                 <img src="/logos/gacb.svg" alt="GACB" className="h-6 w-6 rounded-full bg-white p-0.5" title="Global Accreditation Certification Board" />
                 <img src="/logos/ce.svg" alt="CE" className="h-5 w-8 bg-white rounded px-1" title="CE Mark" />

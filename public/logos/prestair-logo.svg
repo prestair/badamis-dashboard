@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60">
+  <!-- Prestair text with italic styling -->
+  <text x="5" y="28" font-family="Georgia, serif" font-weight="bold" font-style="italic" font-size="26" fill="white">Prestair</text>
+  <!-- Red swoosh under Prestair -->
+  <path d="M 5 32 Q 60 38 120 32" stroke="#c41e3a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Systems LLP -->
+  <text x="5" y="48" font-family="Arial, sans-serif" font-weight="bold" font-size="12" fill="white">Systems LLP</text>
+</svg>
