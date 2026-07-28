@@ -343,21 +343,24 @@ async function downloadPDF(props: Props) {
   doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
 
   // ── Footer on last page ───────────────────────────────────────────────────
-  // Logos row above signature — load PNG images from public folder
+  // Logos row above signature — load actual images from public folder
   ty += 4;
   if (ty + 30 > 270) { doc.addPage(); ty = 15; }
 
   const badgeRow = ty + 2;
 
-  // Load logos as PNG from public folder and embed
-  const logoFiles = ["gacb", "ce", "iaf", "qcs", "iso", "uaf"];
-  const logoWidths  = [10, 12, 14, 14, 10, 16];
-  const logoHeights = [10, 8, 10, 10, 10, 8];
+  // Logo files with format (jsPDF supports PNG and JPEG)
+  const logoConfigs = [
+    { file: "gacb.png",  fmt: "PNG",  w: 12, h: 12 },
+    { file: "ce.jpg",    fmt: "JPEG", w: 14, h: 9  },
+    { file: "iaf.png",   fmt: "PNG",  w: 16, h: 11 },
+    { file: "iso.png",   fmt: "PNG",  w: 12, h: 12 },
+  ];
 
   let lx = ML;
-  for (let i = 0; i < logoFiles.length; i++) {
+  for (const logo of logoConfigs) {
     try {
-      const imgUrl = `${window.location.origin}/logos/${logoFiles[i]}.png`;
+      const imgUrl = `/logos/${logo.file}`;
       const response = await fetch(imgUrl);
       if (response.ok) {
         const blob = await response.blob();
@@ -366,15 +369,15 @@ async function downloadPDF(props: Props) {
           reader.onload = () => resolve(reader.result as string);
           reader.readAsDataURL(blob);
         });
-        doc.addImage(dataUrl, "PNG", lx, badgeRow, logoWidths[i], logoHeights[i]);
+        doc.addImage(dataUrl, logo.fmt, lx, badgeRow, logo.w, logo.h);
       }
     } catch {
-      // skip if image not found
+      // skip if image not available
     }
-    lx += logoWidths[i] + 3;
+    lx += logo.w + 4;
   }
 
-  ty += 16;
+  ty += 18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(22, 40, 70);
