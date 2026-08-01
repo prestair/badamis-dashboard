@@ -45,7 +45,7 @@ export default function PrestairLogo({
 
 export function PrestairBrandHeader({ className = "" }: { className?: string }) {
   return (
-    <div className={`relative overflow-hidden bg-slate-800 px-4 py-3 text-white ${className}`}>
+    <div className={`relative overflow-hidden bg-sky-500 px-4 py-3 text-white ${className}`}>
       <div className="relative flex flex-col items-center justify-between gap-3 sm:flex-row">
         <div className="relative">
           <span

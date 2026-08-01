@@ -23,7 +23,7 @@ export default function DashboardPage() {
     <div className="min-h-screen flex flex-col">
 
       {/* ── HEADER ── */}
-      <header className="bg-gradient-to-r from-slate-900 to-blue-700 text-white shadow-lg">
+      <header className="bg-gradient-to-r from-sky-400 to-blue-500 text-white shadow-lg">
         <div className="max-w-screen-2xl mx-auto px-6">
 
           {/* Row 1: Company logo + report title + company/user details */}

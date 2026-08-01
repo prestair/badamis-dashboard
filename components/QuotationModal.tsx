@@ -208,11 +208,8 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
   // ── Row helpers ────────────────────────────────────────────────────────────
   function updateItemRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
-    const upper = field === "qty" || field === "rate" || field === "slNo" || field === "uid" || field === "sectionId"
-      ? value
-      : value.toUpperCase();
     setItemRows((prev) =>
-      prev.map((r) => (r.uid === uid ? { ...r, [field]: upper } : r))
+      prev.map((r) => (r.uid === uid ? { ...r, [field]: value } : r))
     );
     setSaved(false);
   }
@@ -370,7 +367,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
         {/* ── TOP BAR ── */}
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#1e3a5f,#2563eb)" }}>
+          style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-white font-bold text-base">
@@ -475,7 +472,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                             M/S
                           </span>
                           <input value={partyName}
-                            onChange={(e) => { setPartyName(e.target.value.toUpperCase()); setStep1Errors((x) => ({...x,partyName:""})); }}
+                            onChange={(e) => { setPartyName(e.target.value); setStep1Errors((x) => ({...x,partyName:""})); }}
                             className={inp(step1Errors.partyName) + " rounded-l-none font-semibold"} />
                         </div>
                         {step1Errors.partyName && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.partyName}</p>}
@@ -483,12 +480,12 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Address</label>
                         <textarea value={partyAddress}
-                          onChange={(e) => setPartyAddress(e.target.value.toUpperCase())}
+                          onChange={(e) => setPartyAddress(e.target.value)}
                           rows={3} className={inp() + " resize-none mt-1"} />
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">GST No.</label>
-                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value.toUpperCase())}
+                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value)}
                           className={inp() + " mt-1"} />
                       </div>
                     </div>
@@ -522,7 +519,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Kind Attention</label>
-                        <input value={attention} onChange={(e) => setAttention(e.target.value.toUpperCase())}
+                        <input value={attention} onChange={(e) => setAttention(e.target.value)}
                             className={inp() + " mt-1"} />
                       </div>
                     </div>
@@ -531,7 +528,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   {/* Subject */}
                   <div>
                     <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Subject</label>
-                    <input value={subject} onChange={(e) => setSubject(e.target.value.toUpperCase())}
+                    <input value={subject} onChange={(e) => setSubject(e.target.value)}
                       className={inp() + " mt-1 font-semibold"} />
                   </div>
 
@@ -575,7 +572,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
                   <button onClick={goToStep2}
                     className="w-full py-2.5 rounded-lg text-white font-bold text-sm shadow hover:brightness-110 active:scale-95 transition-all"
-                    style={{ background:"linear-gradient(135deg,#1e3a5f,#2563eb)" }}>
+                    style={{ background:"linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
                     Next → Add Items
                   </button>
                 </div>
@@ -907,7 +904,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {step === 1 && (
               <button onClick={goToStep2}
                 className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
-                style={{ background:"linear-gradient(135deg,#1e3a5f,#2563eb)" }}>
+                style={{ background:"linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
                 Next → Items
               </button>
             )}
