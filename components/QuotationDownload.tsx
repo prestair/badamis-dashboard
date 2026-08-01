@@ -115,7 +115,9 @@ async function downloadExcel(props: Props) {
     ...(props.discounts.legacyAmount > 0
       ? [["","","","","","","","DISCOUNT", props.discounts.legacyAmount]]
       : []),
-    ["","","","","","","","TOTAL AFTER DISCOUNT", props.afterDiscount],
+    ...((props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0)
+      ? [["","","","","","","","TOTAL AFTER DISCOUNT", props.afterDiscount]]
+      : []),
     ["","","","","","","","TRANSPORTATION CHARGES", props.discounts.transportationAmount],
     ["","","","","","","","PACKING CHARGES", props.discounts.packingAmount],
     ["","","","","","","","TAXABLE VALUE BEFORE GST", props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount],
@@ -385,7 +387,9 @@ async function buildQuotationPDF(props: Props) {
       ...(props.discounts.seasonal.enabled ? [["SEASONAL DISCOUNT", fmtNum(safeNum(props.discounts.seasonal.amount))]] : []),
       ...(props.discounts.special.enabled ? [["SPECIAL DISCOUNT", fmtNum(safeNum(props.discounts.special.amount))]] : []),
       ...(props.discounts.legacyAmount > 0 ? [["DISCOUNT", fmtNum(safeNum(props.discounts.legacyAmount))]] : []),
-      ["TOTAL AFTER DISCOUNT", fmtNum(safeNum(props.afterDiscount))],
+      ...((props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0)
+        ? [["TOTAL AFTER DISCOUNT", fmtNum(safeNum(props.afterDiscount))]]
+        : []),
       ["TRANSPORTATION CHARGES", fmtNum(safeNum(props.discounts.transportationAmount))],
       ["PACKING CHARGES", fmtNum(safeNum(props.discounts.packingAmount))],
       ["TAXABLE VALUE BEFORE GST", fmtNum(safeNum(props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount))],
