@@ -232,6 +232,12 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Auto-refresh every 3 minutes
+  useEffect(() => {
+    const interval = setInterval(() => { refresh(); }, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
   // ── save new quotation ─────────────────────────────────────────────────────
   async function saveQuotation(
     q: QuotationInput,
