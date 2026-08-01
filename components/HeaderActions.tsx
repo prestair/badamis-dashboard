@@ -242,7 +242,7 @@ export default function HeaderActions() {
                 <tr key={q.dbId}
                   className="hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => setViewQuotation(q)}>
-                  <td className="border border-slate-200 px-3 py-2 text-center text-slate-800 font-bold">{startIndex + index + 1}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-center text-slate-800 font-bold">{filteredQuotations.length - startIndex - index}</td>
                   <td className="border border-slate-200 px-3 py-2 text-slate-600 font-mono text-[10px]">{q.quotationNo || "—"}</td>
                   <td className="border border-slate-200 px-3 py-2 text-slate-600">{fmtDate(q.date)}</td>
                   <td className="border border-slate-200 px-3 py-2 text-slate-800 font-semibold">{q.partyName}</td>
