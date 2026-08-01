@@ -39,13 +39,13 @@ export default function HamburgerMenu() {
       {/* Hamburger Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex flex-col items-center justify-center w-9 h-9 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 active:scale-90 transition-all"
+        className="flex flex-col items-center justify-center w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 hover:bg-slate-200 active:scale-90 transition-all"
         aria-label="Menu"
         title="Settings"
       >
-        <span className={`block w-4 h-0.5 bg-white rounded-full transition-all ${open ? "rotate-45 translate-y-1" : ""}`} />
-        <span className={`block w-4 h-0.5 bg-white rounded-full mt-1 transition-all ${open ? "opacity-0" : ""}`} />
-        <span className={`block w-4 h-0.5 bg-white rounded-full mt-1 transition-all ${open ? "-rotate-45 -translate-y-1" : ""}`} />
+        <span className={`block w-4 h-0.5 bg-slate-600 rounded-full transition-all ${open ? "rotate-45 translate-y-1" : ""}`} />
+        <span className={`block w-4 h-0.5 bg-slate-600 rounded-full mt-1 transition-all ${open ? "opacity-0" : ""}`} />
+        <span className={`block w-4 h-0.5 bg-slate-600 rounded-full mt-1 transition-all ${open ? "-rotate-45 -translate-y-1" : ""}`} />
       </button>
 
       {/* Dropdown Menu */}

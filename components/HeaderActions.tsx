@@ -136,28 +136,28 @@ export default function HeaderActions() {
   return (
     <>
       {/* ── ROW 2: Action buttons ── */}
-      <div className="flex flex-wrap items-center justify-center gap-3 py-3 border-b border-white/10">
+      <div className="flex flex-wrap items-center justify-center gap-3 py-3 border-b border-slate-200">
         {/* Total */}
-        <div className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-white/10 border border-white/30 backdrop-blur-sm">
-          <span className="text-blue-200 text-xs">Total Quotation</span>
-          <span className="text-white font-bold text-base">{loading ? "…" : filteredQuotations.length}</span>
+        <div className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-slate-100 border border-slate-200">
+          <span className="text-slate-500 text-xs">Total Quotation</span>
+          <span className="text-slate-800 font-bold text-base">{loading ? "…" : filteredQuotations.length}</span>
           {filteredQuotations.length > 0 && (
             <>
-              <span className="text-white/30">|</span>
-              <span className="text-green-300 font-bold">{fmt(totalGrand)}</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-green-600 font-bold">{fmt(totalGrand)}</span>
             </>
           )}
         </div>
         {/* Create New */}
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-green-600 hover:bg-green-700 active:scale-95 transition-all shadow-md">
+          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 active:scale-95 transition-all shadow-md">
           <span className="text-base leading-none">+</span> Create New
         </button>
         {loggedRole === "admin" && (
           <button
             type="button"
             onClick={() => setShowItemNames(true)}
-            className="flex items-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-500/30 px-5 py-2 text-sm font-semibold text-white shadow-md transition-all hover:bg-cyan-500/50 active:scale-95"
+            className="flex items-center gap-2 rounded-lg border border-cyan-400 bg-cyan-50 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm transition-all hover:bg-cyan-100 active:scale-95"
           >
             Item Names
           </button>
@@ -167,33 +167,33 @@ export default function HeaderActions() {
           if (quotations.length > 0) setEditQuotation(quotations[quotations.length - 1]);
           else setShowCreate(true);
         }}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-md">
+          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-md">
           <span>✏️</span> Edit
         </button>
         <button
           type="button"
           onClick={() => refresh()}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 transition-all disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 active:scale-95 transition-all disabled:opacity-50"
           title="Refresh quotations"
         >
           <span className={loading ? "animate-spin" : ""}>↻</span> Refresh
         </button>
         <div className="relative min-w-[280px] w-full max-w-sm">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-200/70" aria-hidden="true">⌕</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true">⌕</span>
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search user, quotation no. or party name…"
-            className="w-full rounded-lg border border-white/20 bg-white/10 py-2 pl-8 pr-8 text-xs text-white placeholder:text-blue-100/50 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-300"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
             aria-label="Search by user name, quotation number, or party name"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
               aria-label="Clear quotation search"
             >
               ✕
@@ -205,14 +205,14 @@ export default function HeaderActions() {
       {/* ── ROW 3: Quotations table ── */}
       <div className="pb-4 pt-2">
         <div className="flex flex-wrap items-center justify-end gap-2 px-1 pb-2">
-          <span className="whitespace-nowrap text-[10px] text-blue-100/70">
+          <span className="whitespace-nowrap text-[10px] text-slate-500">
             {filteredQuotations.length} found
           </span>
           <button
             type="button"
             onClick={exportDisplayedCSV}
             disabled={loading || visibleQuotations.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/20 px-3 py-1.5 text-[10px] font-bold text-emerald-200 transition-all hover:bg-emerald-500/40 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             title={`Export the ${visibleQuotations.length} quotations currently displayed`}
           >
             📥 CSV ({visibleQuotations.length})
@@ -220,44 +220,44 @@ export default function HeaderActions() {
         </div>
 
         {loading ? (
-          <div className="text-center text-blue-200 text-sm py-4 animate-pulse">Loading quotations…</div>
+          <div className="text-center text-slate-400 text-sm py-4 animate-pulse">Loading quotations…</div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-white/10 text-blue-100 text-[11px]">
-                <th className="border border-white/15 px-3 py-2 text-center w-10">No.</th>
-                <th className="border border-white/15 px-3 py-2 text-left">Quotation No.</th>
-                <th className="border border-white/15 px-3 py-2 text-left">Date</th>
-                <th className="border border-white/15 px-3 py-2 text-left">Party Name</th>
-                <th className="border border-white/15 px-3 py-2 text-left">Address</th>
-                <th className="border border-white/15 px-3 py-2 text-right">Grand Total</th>
-                <th className="border border-white/15 px-3 py-2 text-left">User</th>
-                <th className="border border-white/15 px-3 py-2 text-center" style={{ width: 260 }}>Actions</th>
+              <tr className="bg-slate-50 text-slate-600 text-[11px]">
+                <th className="border border-slate-200 px-3 py-2 text-center w-10">No.</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">Quotation No.</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">Date</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">Party Name</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">Address</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">Grand Total</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">User</th>
+                <th className="border border-slate-200 px-3 py-2 text-center" style={{ width: 260 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {visibleQuotations.map((q) => (
                 <tr key={q.dbId}
-                  className="hover:bg-white/5 transition-colors cursor-pointer"
+                  className="hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => setViewQuotation(q)}>
-                  <td className="border border-white/10 px-3 py-2 text-center text-white font-bold">{q.serialNo}</td>
-                  <td className="border border-white/10 px-3 py-2 text-blue-100 font-mono text-[10px]">{q.quotationNo || "—"}</td>
-                  <td className="border border-white/10 px-3 py-2 text-white/80">{fmtDate(q.date)}</td>
-                  <td className="border border-white/10 px-3 py-2 text-white font-semibold">{q.partyName}</td>
-                  <td className="border border-white/10 px-3 py-2 text-white/60 max-w-[160px] truncate">{q.partyAddress || "—"}</td>
-                  <td className="border border-white/10 px-3 py-2 text-right text-green-300 font-bold font-mono">
+                  <td className="border border-slate-200 px-3 py-2 text-center text-slate-800 font-bold">{q.serialNo}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-slate-600 font-mono text-[10px]">{q.quotationNo || "—"}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-slate-600">{fmtDate(q.date)}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-slate-800 font-semibold">{q.partyName}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-slate-500 max-w-[160px] truncate">{q.partyAddress || "—"}</td>
+                  <td className="border border-slate-200 px-3 py-2 text-right text-green-600 font-bold font-mono">
                     ₹{q.grandTotal.toLocaleString("en-IN")}
                   </td>
                   <td
-                    className="relative border border-white/10 px-3 py-2 whitespace-nowrap"
+                    className="relative border border-slate-200 px-3 py-2 whitespace-nowrap"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <button
                       type="button"
                       onClick={() => setHistoryFor((current) => current === q.dbId ? null : q.dbId)}
-                      className="font-semibold text-blue-100 hover:text-white hover:underline"
+                      className="font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                       title="View compact step-by-step edit history"
                       aria-expanded={historyFor === q.dbId}
                       aria-controls={`quotation-history-${q.dbId}`}
@@ -347,28 +347,28 @@ export default function HeaderActions() {
                       </div>
                     )}
                   </td>
-                  <td className="border border-white/10 px-2 py-2 text-center"
+                  <td className="border border-slate-200 px-2 py-2 text-center"
                     onClick={(event) => event.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1.5">
                       <button onClick={() => setViewQuotation(q)}
-                        className="px-2 py-0.5 rounded bg-emerald-500/40 hover:bg-emerald-500/70 text-white text-[10px] font-bold transition-all">
+                        className="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-[10px] font-bold transition-all">
                         👁 View
                       </button>
                       <button
                         type="button"
                         onClick={() => handlePrint(q)}
                         disabled={printingId !== null}
-                        className="px-2 py-0.5 rounded bg-amber-500/40 hover:bg-amber-500/70 text-white text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50"
+                        className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50"
                         title="Print this quotation"
                       >
                         {printingId === q.dbId ? "Preparing…" : "🖨 Print"}
                       </button>
                       <button onClick={() => setEditQuotation(q)}
-                        className="px-2 py-0.5 rounded bg-blue-500/40 hover:bg-blue-500/70 text-white text-[10px] font-bold transition-all">
+                        className="px-2 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 text-[10px] font-bold transition-all">
                         ✏️ Edit
                       </button>
                       <button onClick={() => { setEditQuotation({...q, dbId: "", serialNo: 0, quotationNo: ""}); }}
-                        className="px-2 py-0.5 rounded bg-purple-500/40 hover:bg-purple-500/70 text-white text-[10px] font-bold transition-all"
+                        className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold transition-all"
                         title="Duplicate this quotation">
                         📋 Copy
                       </button>
@@ -377,7 +377,7 @@ export default function HeaderActions() {
                           className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                             confirmDelete === q.dbId
                               ? "bg-red-600 text-white animate-pulse"
-                              : "bg-red-500/30 hover:bg-red-500/60 text-red-200"
+                              : "bg-red-100 hover:bg-red-200 text-red-700"
                           }`}>
                           {confirmDelete === q.dbId ? "Confirm?" : "🗑 Del"}
                         </button>
@@ -389,7 +389,7 @@ export default function HeaderActions() {
 
               {visibleQuotations.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="border border-white/10 px-3 py-6 text-center text-blue-100/60">
+                  <td colSpan={8} className="border border-slate-200 px-3 py-6 text-center text-slate-400">
                     No quotations match the current search and date filters.
                   </td>
                 </tr>
@@ -398,29 +398,29 @@ export default function HeaderActions() {
               </table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-2 text-[10px] text-blue-100/70">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-2 text-[10px] text-slate-500">
               <span>
-                Showing <strong className="text-white">{firstShown}–{lastShown}</strong> of{" "}
-                <strong className="text-white">{filteredQuotations.length}</strong> quotations
+                Showing <strong className="text-slate-800">{firstShown}–{lastShown}</strong> of{" "}
+                <strong className="text-slate-800">{filteredQuotations.length}</strong> quotations
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   disabled={effectivePage <= 1}
-                  className="rounded border border-white/20 bg-white/10 px-3 py-1 font-bold text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="rounded border border-slate-200 bg-white px-3 py-1 font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   ← Previous
                 </button>
-                <span className="min-w-[72px] text-center text-blue-100">
-                  Page <strong className="text-white">{effectivePage}</strong> of{" "}
-                  <strong className="text-white">{totalPages}</strong>
+                <span className="min-w-[72px] text-center text-slate-600">
+                  Page <strong className="text-slate-800">{effectivePage}</strong> of{" "}
+                  <strong className="text-slate-800">{totalPages}</strong>
                 </span>
                 <button
                   type="button"
                   onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                   disabled={effectivePage >= totalPages}
-                  className="rounded border border-white/20 bg-white/10 px-3 py-1 font-bold text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="rounded border border-slate-200 bg-white px-3 py-1 font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   Next →
                 </button>

@@ -23,11 +23,11 @@ export default function DashboardPage() {
     <div className="min-h-screen flex flex-col">
 
       {/* ── HEADER ── */}
-      <header className="bg-gradient-to-r from-[#0f172a] via-[#1e3a5f] to-[#2563eb] text-white shadow-lg">
+      <header className="bg-gradient-to-r from-white to-slate-100 text-slate-800 shadow-sm border-b border-slate-200">
         <div className="max-w-screen-2xl mx-auto px-6">
 
           {/* Row 1: Company logo + report title + company/user details */}
-          <div className="grid grid-cols-1 items-center gap-3 border-b border-white/10 py-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 items-center gap-3 border-b border-slate-200 py-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
 
             {/* Left: exact shared Prestair logo + certification badges */}
             <div className="flex min-w-0 flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -59,8 +59,8 @@ export default function DashboardPage() {
             <div className="flex min-w-0 flex-col items-center gap-2 lg:items-end">
               <div className="flex items-start gap-3">
                 <div className="max-w-sm text-center lg:text-right">
-                  <p className="text-xs text-blue-200">GST: {QUOTATION_META.vendorGST}</p>
-                  <p className="text-[10px] leading-relaxed text-blue-300">{PRESTAIR_ADDRESS}</p>
+                  <p className="text-xs text-slate-500">GST: {QUOTATION_META.vendorGST}</p>
+                  <p className="text-[10px] leading-relaxed text-slate-400">{PRESTAIR_ADDRESS}</p>
                 </div>
                 <HamburgerMenu />
               </div>
