@@ -191,7 +191,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
         onKeyDown={handleDialogKeyDown}
         className="flex max-h-[92dvh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
       >
-        <div className="flex flex-shrink-0 items-center justify-between px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+        <div className="flex flex-shrink-0 items-center justify-between px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
             <h2 id="user-management-title" className="text-base font-bold text-white sm:text-lg">User Management</h2>
             <p className="text-xs text-blue-200">Separate admin window · Prestair Systems</p>

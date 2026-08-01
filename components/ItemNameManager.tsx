@@ -147,7 +147,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
         aria-labelledby="item-name-manager-title"
         className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white text-slate-800 shadow-2xl"
       >
-        <header className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+        <header className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
             <h2 id="item-name-manager-title" className="text-lg font-bold text-white">Item Name Management</h2>
             <p className="text-xs text-blue-200">These values appear in the Item Name dropdown when creating a quotation.</p>

@@ -32,7 +32,7 @@ export default function LoginPage() {
 
       {/* ══════ LEFT PANEL — Branding & Imagery ══════ */}
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden flex-col justify-between"
-        style={{ background: "linear-gradient(135deg, #38bdf8 0%, #0ea5e9 40%, #0284c7 100%)" }}>
+        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #2563eb 100%)" }}>
 
         {/* Background pattern overlay */}
         <div className="absolute inset-0 opacity-10"
@@ -208,7 +208,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading}
                 className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(135deg, #38bdf8, #0ea5e9)" }}
+                style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)" }}
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">

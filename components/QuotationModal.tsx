@@ -367,7 +367,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
         {/* ── TOP BAR ── */}
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+          style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-white font-bold text-base">
@@ -572,7 +572,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
                   <button onClick={goToStep2}
                     className="w-full py-2.5 rounded-lg text-white font-bold text-sm shadow hover:brightness-110 active:scale-95 transition-all"
-                    style={{ background:"linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+                    style={{ background:"linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
                     Next → Add Items
                   </button>
                 </div>
@@ -904,7 +904,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {step === 1 && (
               <button onClick={goToStep2}
                 className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
-                style={{ background:"linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+                style={{ background:"linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
                 Next → Items
               </button>
             )}

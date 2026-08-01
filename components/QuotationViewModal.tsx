@@ -94,7 +94,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
 
         {/* ── TOP BAR ── */}
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+          style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
             <h2 className="text-white font-bold text-base">
               👁 Quotation #{q.serialNo} — {q.partyName}
@@ -285,7 +285,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
             </button>
             <button onClick={() => onEdit(q)}
               className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
-              style={{ background: "linear-gradient(135deg,#38bdf8,#0ea5e9)" }}>
+              style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
               ✏️ Edit This Quotation
             </button>
           </div>
