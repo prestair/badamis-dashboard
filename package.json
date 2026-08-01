@@ -1,12 +1,14 @@
 {
   "name": "badamis-dashboard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:build": "electron-builder --win --config electron-builder.json"
   },
   "dependencies": {
     "@supabase/server": "^1.4.1",
@@ -24,8 +26,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^10.8.0",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "9.39.5",
     "eslint-config-next": "^16.2.11",
+    "png-to-ico": "^2.1.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

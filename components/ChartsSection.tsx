@@ -21,12 +21,7 @@ const Top10Chart = dynamic(() => import("@/components/Top10Chart"), {
   loading: () => <ChartSkeleton />,
 });
 
-const PaymentChart = dynamic(() => import("@/components/PaymentChart"), {
-  ssr: false,
-  loading: () => <ChartSkeleton />,
-});
-
-const SectionCountChart = dynamic(() => import("@/components/SectionCountChart"), {
+const QuotationUserChart = dynamic(() => import("@/components/QuotationUserChart"), {
   ssr: false,
   loading: () => <ChartSkeleton />,
 });
@@ -34,16 +29,12 @@ const SectionCountChart = dynamic(() => import("@/components/SectionCountChart")
 export default function ChartsSection() {
   return (
     <>
-      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SectionBarChart />
         <Top10Chart />
       </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <PaymentChart />
-        <SectionCountChart />
+      <div className="mt-5">
+        <QuotationUserChart />
       </div>
     </>
   );

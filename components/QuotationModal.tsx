@@ -1,32 +1,83 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuotations, SavedQuotation, SavedRowState } from "@/context/QuotationContext";
+import { useAuth } from "@/context/AuthContext";
+import { PrestairBrandHeader } from "@/components/PrestairLogo";
 import dynamic from "next/dynamic";
 
 const QuotationDownload = dynamic(() => import("@/components/QuotationDownload"), { ssr: false });
 
-const today = new Date().toISOString().split("T")[0];
-
-// Generate quotation number based on count
-function generateQuotationNo(count: number): string {
+// Generate quotation number based on FY.
+// Numbering resets to 1 each financial year (April 1).
+// For FY 2026-27, minimum starts at 554 (offset for pre-existing quotations).
+function generateQuotationNo(quotations: { quotationNo: string; date: string }[], fullName = ""): string {
   const now = new Date();
-  const year = now.getFullYear() % 100; // 26
-  const nextYear = year + 1; // 27
-  const num = String(count + 1).padStart(4, "0");
-  return `PS/${year}-${nextYear}/QT-${num}`;
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+  const year = fyStartYear % 100;
+  const nextYear = (fyStartYear + 1) % 100;
+  const fyPrefix = `PS/${year}-${nextYear}/QT-`;
+
+  // Find the highest number already used in this FY
+  let maxNum = 0;
+  for (const q of quotations) {
+    const qNo = q.quotationNo || "";
+    if (qNo.startsWith(fyPrefix)) {
+      // Extract digits after prefix, ignoring trailing initials like " MN"
+      const afterPrefix = qNo.slice(fyPrefix.length).trim();
+      const match = afterPrefix.match(/^(\d+)/);
+      if (match) {
+        const parsed = parseInt(match[1], 10);
+        if (parsed > maxNum) maxNum = parsed;
+      }
+    }
+  }
+
+  // Floor: for FY starting 2026 (i.e. 2026-27), start at minimum 554
+  // For any future FY, start at 1
+  const floor = fyStartYear === 2026 ? 553 : 0;
+  const nextNum = Math.max(maxNum, floor) + 1;
+  const num = String(nextNum).padStart(4, "0");
+
+  const initials = getInitials(fullName);
+  return `PS/${year}-${nextYear}/QT-${num}${initials ? " " + initials : ""}`;
+}
+
+// Get first letter of first name and surname
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Format stored YYYY-MM-DD to DD/MM/YYYY for display
+function fmtDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  if (!y || !m || !d) return dateStr;
+  return `${d}/${m}/${y}`;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+type QuotationItemName = {
+  id: string;
+  item_name: string;
+};
+
 type ItemRow = {
   uid:      string; // unique key for React
+  rowType:  "item" | "section";
+  sectionId: string;
   slNo:     string;
   itemCode: string;
   desc:     string;
   size:     string;
   hsn:      string;
   qty:      string;
-  discount: string;
+  additionalColumn: string;
   rate:     string;
 };
 
@@ -36,98 +87,199 @@ let uidCounter = 1;
 function newUid() { return `row-${uidCounter++}`; }
 
 function blankRow(slNo: number): ItemRow {
-  return { uid: newUid(), slNo: String(slNo), itemCode: "", desc: "", size: "", hsn: "", qty: "", discount: "0", rate: "" };
+  return {
+    uid: newUid(), rowType: "item", sectionId: "", slNo: String(slNo),
+    itemCode: "", desc: "", size: "", hsn: "", qty: "",
+    additionalColumn: "", rate: "",
+  };
+}
+
+function blankSection(title = ""): ItemRow {
+  const uid = newUid();
+  return {
+    uid, rowType: "section", sectionId: `section-${Date.now()}-${uid}`,
+    slNo: "", itemCode: "", desc: title, size: "", hsn: "", qty: "",
+    additionalColumn: "", rate: "",
+  };
+}
+
+function renumberItemRows(rows: ItemRow[]): ItemRow[] {
+  let itemNumber = 0;
+  return rows.map((row) => row.rowType === "section"
+    ? { ...row, slNo: "" }
+    : { ...row, slNo: String(++itemNumber) });
 }
 
 function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
-  if (!initial || initial.rows.length === 0) return [blankRow(1)];
-  return initial.rows.map((r, i) => ({
-    uid:      newUid(),
-    slNo:     String(i + 1),
-    itemCode: r.id,
-    desc:     r.desc,
-    size:     r.size,
-    hsn:      r.hsn,
-    qty:      String(r.qty),
-    discount: "0",
-    rate:     r.rate !== null ? String(r.rate) : "",
-  }));
+  if (!initial || initial.rows.length === 0) {
+    return [blankSection("SECTION 1"), blankRow(1)];
+  }
+
+  let itemNumber = 0;
+  return initial.rows.map((row) => {
+    if (row.rowType === "section") {
+      return {
+        uid: newUid(), rowType: "section", sectionId: row.id,
+        slNo: "", itemCode: "", desc: row.desc || row.section,
+        size: "", hsn: "", qty: "", additionalColumn: "", rate: "",
+      };
+    }
+
+    return {
+      uid: newUid(), rowType: "item", sectionId: "",
+      slNo: String(++itemNumber), itemCode: row.id, desc: row.desc,
+      size: row.size, hsn: row.hsn, qty: String(row.qty),
+      additionalColumn: row.additionalColumn,
+      rate: row.rate !== null ? String(row.rate) : "",
+    };
+  });
 }
 
 export default function QuotationModal({ onClose, initialData }: Props) {
-  const { saveQuotation, updateQuotation, totalCount } = useQuotations();
-  const isEdit = !!initialData;
+  const { saveQuotation, updateQuotation, quotations } = useQuotations();
+  const { loggedUser, loggedRole, users } = useAuth();
+  const actorName = users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
+  const isEdit = !!initialData?.dbId;
+  const canEditQuotationNumber = loggedRole === "admin";
+  const initialLegacyDiscount = initialData?.discounts.legacyAmount ?? 0;
 
   // ── Step state ────────────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2>(1);
 
   // ── Step 1: Party / Quotation details ─────────────────────────────────────
-  const [date,         setDate]         = useState(initialData?.date         ?? today);
+  const [date,         setDate]         = useState(initialData?.date         ?? "");
   const [partyName,    setPartyName]    = useState(initialData?.partyName    ?? "");
   const [partyAddress, setPartyAddress] = useState(initialData?.partyAddress ?? "");
   const [partyGST,     setPartyGST]     = useState(initialData?.partyGST    ?? "");
   const [attention,    setAttention]    = useState(initialData?.attention    ?? "");
-  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo  ?? generateQuotationNo(totalCount));
-  const [subject,      setSubject]      = useState(
-    initialData?.subject ??
-    "QUOTATION FOR DISPLAY WITH SERVICES COUNTER & KITCHEN EQUIPMENT - AT BADAMI'S SWEETS-SAYA SOUTH EX NOIDA"
+  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo || generateQuotationNo(quotations, actorName));
+  const [subject,      setSubject]      = useState(initialData?.subject      ?? "");
+  const [seasonalEnabled, setSeasonalEnabled] = useState(initialData?.discounts.seasonal.enabled ?? false);
+  const [seasonalDiscount, setSeasonalDiscount] = useState(
+    initialData?.discounts.seasonal.amount ? String(initialData.discounts.seasonal.amount) : ""
+  );
+  const [specialEnabled, setSpecialEnabled] = useState(
+    (initialData?.discounts.special.enabled ?? false) || initialLegacyDiscount > 0
+  );
+  const [specialDiscount, setSpecialDiscount] = useState(() => {
+    const storedSpecial = initialData?.discounts.special.amount ?? 0;
+    const amount = storedSpecial > 0 ? storedSpecial : initialLegacyDiscount;
+    return amount > 0 ? String(amount) : "";
+  });
+  const [transportationCharges, setTransportationCharges] = useState(
+    initialData?.discounts.transportationAmount ? String(initialData.discounts.transportationAmount) : ""
+  );
+  const [packingCharges, setPackingCharges] = useState(
+    initialData?.discounts.packingAmount ? String(initialData.discounts.packingAmount) : ""
   );
   const [step1Errors, setStep1Errors] = useState<Record<string,string>>({});
 
   // ── Step 2: Item rows ──────────────────────────────────────────────────────
   const [itemRows, setItemRows] = useState<ItemRow[]>(() => initItemRows(initialData));
-  const [overallDiscount, setOverallDiscount] = useState(
-    initialData?.discount != null ? String(initialData.discount) : "0"
-  );
+  const [itemNameOptions, setItemNameOptions] = useState<QuotationItemName[]>([]);
+  const [itemNameLoadError, setItemNameLoadError] = useState("");
   const [saved,       setSaved]       = useState(false);
   const [savedSerial, setSavedSerial] = useState<number | null>(null);
 
+  const loadItemNameOptions = useCallback(async () => {
+    try {
+      const response = await fetch("/api/quotation-item-names", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to load Item Names.");
+      setItemNameOptions(Array.isArray(data) ? data : []);
+      setItemNameLoadError("");
+    } catch (error) {
+      setItemNameLoadError(error instanceof Error ? error.message : "Unable to load Item Names.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadItemNameOptions();
+  }, [loadItemNameOptions]);
+
   // close on Escape
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const fn = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
 
   // ── Row helpers ────────────────────────────────────────────────────────────
-  function updateItemRow(uid: string, field: keyof ItemRow, value: string) {
+  function updateItemRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
+    const upper = field === "qty" || field === "rate" || field === "slNo" || field === "uid" || field === "sectionId"
+      ? value
+      : value.toUpperCase();
     setItemRows((prev) =>
-      prev.map((r) => (r.uid === uid ? { ...r, [field]: value } : r))
+      prev.map((r) => (r.uid === uid ? { ...r, [field]: upper } : r))
     );
     setSaved(false);
   }
 
   function addRow() {
-    setItemRows((prev) => [...prev, blankRow(prev.length + 1)]);
-  }
-
-  function deleteRow(uid: string) {
     setItemRows((prev) => {
-      const next = prev.filter((r) => r.uid !== uid);
-      return next.map((r, i) => ({ ...r, slNo: String(i + 1) }));
+      const itemCount = prev.filter((row) => row.rowType === "item").length;
+      return [...prev, blankRow(itemCount + 1)];
     });
     setSaved(false);
   }
 
-  // ── Per-row amount = qty * rate - row discount ─────────────────────────────
+  function addSection() {
+    setItemRows((prev) => {
+      const sectionCount = prev.filter((row) => row.rowType === "section").length;
+      return [...prev, blankSection(`SECTION ${sectionCount + 1}`)];
+    });
+    setSaved(false);
+  }
+
+  function deleteRow(uid: string) {
+    setItemRows((prev) => renumberItemRows(prev.filter((r) => r.uid !== uid)));
+    setSaved(false);
+  }
+
+  const itemCount = itemRows.filter((row) => row.rowType === "item").length;
+
+  // ── Per-row gross amount = qty × rate ─────────────────────────────────────
   function rowAmt(row: ItemRow): number | null {
+    if (row.rowType === "section") return null;
     const qty  = Number(row.qty);
     const rate = Number(row.rate);
-    const disc = Number(row.discount) || 0;
     if (!row.qty || !row.rate || isNaN(qty) || isNaN(rate)) return null;
-    return Math.max(0, qty * rate - disc);
+    return qty * rate;
   }
 
   // ── Live totals ────────────────────────────────────────────────────────────
-  const { gross, overallDisc, afterDiscount, gst, grandTotal } = useMemo(() => {
-    const gross        = itemRows.reduce((s, r) => s + (rowAmt(r) ?? 0), 0);
-    const overallDisc  = Math.max(0, Number(overallDiscount) || 0);
-    const afterDiscount = Math.max(0, gross - overallDisc);
-    const gst           = Math.round(afterDiscount * 0.18);
-    const grandTotal    = afterDiscount + gst;
-    return { gross, overallDisc, afterDiscount, gst, grandTotal };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemRows, overallDiscount]);
+  const {
+    gross,
+    seasonalAmount,
+    specialAmount,
+    totalDiscount,
+    afterDiscount,
+    transportationAmount,
+    packingAmount,
+    taxableAmount,
+    gst,
+    grandTotal,
+  } = useMemo(() => {
+    const gross = itemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0);
+    const seasonalAmount = seasonalEnabled ? Math.max(0, Number(seasonalDiscount) || 0) : 0;
+    const specialAmount = specialEnabled ? Math.max(0, Number(specialDiscount) || 0) : 0;
+    const totalDiscount = seasonalAmount + specialAmount;
+    const afterDiscount = Math.max(0, gross - totalDiscount);
+    const transportationAmount = Math.max(0, Number(transportationCharges) || 0);
+    const packingAmount = Math.max(0, Number(packingCharges) || 0);
+    const taxableAmount = afterDiscount + transportationAmount + packingAmount;
+    const gst = Math.round(taxableAmount * 0.18);
+    const grandTotal = taxableAmount + gst;
+    return {
+      gross, seasonalAmount, specialAmount, totalDiscount, afterDiscount,
+      transportationAmount, packingAmount, taxableAmount, gst, grandTotal,
+    };
+  }, [
+    itemRows, seasonalEnabled, seasonalDiscount, specialEnabled, specialDiscount,
+    transportationCharges, packingCharges,
+  ]);
 
   const fmt = (n: number) => n.toLocaleString("en-IN");
 
@@ -149,29 +301,56 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
     const savedRows: SavedRowState[] = itemRows.map((r) => {
+      if (r.rowType === "section") {
+        const heading = r.desc.trim() || "Untitled Section";
+        return {
+          id: r.sectionId,
+          rowType: "section",
+          desc: heading,
+          size: "",
+          hsn: "",
+          section: heading,
+          qty: 0,
+          additionalColumn: "",
+          discount: 0,
+          discountIsPerUnit: true,
+          rate: null,
+          amt: null,
+          checked: true,
+        };
+      }
+
       const rate = r.rate === "" ? null : Number(r.rate);
       const qty  = Number(r.qty) || 0;
       const amt  = rowAmt(r);
-      return { id: r.itemCode || r.slNo, desc: r.desc, size: r.size, hsn: r.hsn,
-               section: "Custom", qty, rate, amt, checked: true };
+      return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
+               section: "Custom", qty, additionalColumn: r.additionalColumn,
+               discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
     });
 
     const payload = {
       quotationNo, date, partyName, partyAddress, partyGST, subject, attention,
-      rows: savedRows, gross, discount: overallDisc, afterDiscount, gst, grandTotal,
+      rows: savedRows, gross, discount: totalDiscount,
+      discounts: {
+        seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
+        special: { enabled: specialEnabled, amount: specialAmount },
+        legacyAmount: 0,
+        transportationAmount,
+        packingAmount,
+      },
+      afterDiscount, gst, grandTotal,
     };
 
     try {
       if (isEdit && initialData) {
-        await updateQuotation(initialData.dbId, payload);
+        await updateQuotation(initialData.dbId, payload, actorName);
         setSavedSerial(initialData.serialNo);
       } else {
-        const serial = await saveQuotation(payload);
+        const serial = await saveQuotation(payload, actorName);
         setSavedSerial(serial);
       }
       setSaved(true);
-      // ── Auto-close after 1.5 seconds — return to dashboard ──
-      setTimeout(() => onClose(), 1500);
+      onClose();
     } catch (e) {
       console.error("Save failed", e);
       alert("Failed to save. Please try again.");
@@ -223,19 +402,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {/* Download buttons — show on step 2 */}
             {step === 2 && (
               <QuotationDownload
-                quotation={initialData!}
+                quotation={initialData ?? undefined}
                 partyName={partyName}
+                partyAddress={partyAddress}
+                partyGST={partyGST}
+                attention={attention}
                 quotationNo={quotationNo}
                 date={date}
                 subject={subject}
                 rows={itemRows.map((r) => ({
-                  slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  rowType: r.rowType, slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
                   size: r.size, hsn: r.hsn, qty: r.qty,
-                  discount: r.discount, rate: r.rate,
+                  additionalColumn: r.additionalColumn, rate: r.rate,
                   amt: rowAmt(r),
+                  section: r.rowType === "section" ? r.desc : undefined,
                 }))}
                 gross={gross}
-                discount={overallDisc}
+                discounts={{
+                  seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
+                  special: { enabled: specialEnabled, amount: specialAmount },
+                  legacyAmount: 0,
+                  transportationAmount,
+                  packingAmount,
+                }}
                 afterDiscount={afterDiscount}
                 gst={gst}
                 grandTotal={grandTotal}
@@ -269,11 +458,8 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {/* ════ STEP 1: Party Details ════ */}
             {step === 1 && (
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                {/* Header */}
-                <div className="bg-slate-800 text-white text-center py-3">
-                  <p className="font-bold text-base">PRESTAIR SYSTEMS LLP</p>
-                  <p className="text-slate-300 text-xs">B-127 Phase-2, Noida, UP 201305 | GST: 09AATFP8342B1ZX</p>
-                </div>
+                {/* Company branding */}
+                <PrestairBrandHeader />
 
                 <div className="p-6 space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -283,24 +469,27 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                         Party Details
                       </p>
                       <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">M/S (Party Name) *</label>
-                        <input value={partyName}
-                          onChange={(e) => { setPartyName(e.target.value); setStep1Errors((x) => ({...x,partyName:""})); }}
-                          placeholder="BADAMI'S HARVEST PRIVATE LIMITED"
-                          className={inp(step1Errors.partyName) + " font-semibold mt-1"} />
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Party Name *</label>
+                        <div className="mt-1 flex">
+                          <span className="flex items-center rounded-l border border-r-0 border-slate-300 bg-slate-100 px-2 text-xs font-bold text-slate-700">
+                            M/S
+                          </span>
+                          <input value={partyName}
+                            onChange={(e) => { setPartyName(e.target.value.toUpperCase()); setStep1Errors((x) => ({...x,partyName:""})); }}
+                            className={inp(step1Errors.partyName) + " rounded-l-none font-semibold"} />
+                        </div>
                         {step1Errors.partyName && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.partyName}</p>}
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Address</label>
                         <textarea value={partyAddress}
-                          onChange={(e) => setPartyAddress(e.target.value)}
-                          placeholder="Village Bisrakh Jalalpur, Noida, Gautam Buddha Nagar, UP – 203207"
+                          onChange={(e) => setPartyAddress(e.target.value.toUpperCase())}
                           rows={3} className={inp() + " resize-none mt-1"} />
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">GST No.</label>
-                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value)}
-                          placeholder="09AANCB2006P1ZD" className={inp() + " mt-1"} />
+                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value.toUpperCase())}
+                          className={inp() + " mt-1"} />
                       </div>
                     </div>
 
@@ -318,24 +507,23 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                           {step1Errors.date && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.date}</p>}
                         </div>
                         <div>
-                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Quotation No.</label>
-                          <input value={quotationNo} onChange={(e) => setQuotationNo(e.target.value)}
-                            className={inp() + " mt-1"} />
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                            Quotation No.{canEditQuotationNumber ? "" : " (Admin only)"}
+                          </label>
+                          <input
+                            value={quotationNo}
+                            onChange={(event) => setQuotationNo(event.target.value)}
+                            readOnly={!canEditQuotationNumber}
+                            aria-readonly={!canEditQuotationNumber}
+                            title={canEditQuotationNumber ? "Quotation number" : "Only an admin can change the quotation number"}
+                            className={`${inp()} mt-1 ${!canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
+                          />
                         </div>
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Kind Attention</label>
-                        <input value={attention} onChange={(e) => setAttention(e.target.value)}
-                          placeholder="Mr. Gulshan Bhati" className={inp() + " mt-1"} />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Overall Discount (₹)</label>
-                        <div className="relative mt-1">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
-                          <input type="number" min={0} value={overallDiscount}
-                            onChange={(e) => setOverallDiscount(e.target.value)}
-                            placeholder="0" className={inp() + " pl-5"} />
-                        </div>
+                        <input value={attention} onChange={(e) => setAttention(e.target.value.toUpperCase())}
+                            className={inp() + " mt-1"} />
                       </div>
                     </div>
                   </div>
@@ -343,8 +531,46 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   {/* Subject */}
                   <div>
                     <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Subject</label>
-                    <input value={subject} onChange={(e) => setSubject(e.target.value)}
+                    <input value={subject} onChange={(e) => setSubject(e.target.value.toUpperCase())}
                       className={inp() + " mt-1 font-semibold"} />
+                  </div>
+
+                  {/* Optional total-level discounts */}
+                  <div>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Optional Discounts
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {([
+                        ["Seasonal Discount", seasonalEnabled, setSeasonalEnabled],
+                        ["Special Discount", specialEnabled, setSpecialEnabled],
+                      ] as const).map(([label, enabled, setEnabled]) => (
+                        <div key={label} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{label}</span>
+                          <div className="flex overflow-hidden rounded-lg border border-slate-300" role="group" aria-label={`${label} enabled`}>
+                            <button
+                              type="button"
+                              onClick={() => setEnabled(true)}
+                              aria-pressed={enabled}
+                              className={`px-3 py-1.5 text-xs font-bold transition-colors ${enabled ? "bg-green-600 text-white" : "bg-white text-slate-500 hover:bg-slate-100"}`}
+                            >
+                              YES
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEnabled(false)}
+                              aria-pressed={!enabled}
+                              className={`px-3 py-1.5 text-xs font-bold transition-colors ${!enabled ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-100"}`}
+                            >
+                              NO
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400">
+                      Enabled discount amounts can be entered after Total Amount on the item page.
+                    </p>
                   </div>
 
                   <button onClick={goToStep2}
@@ -360,10 +586,13 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {step === 2 && (
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
 
-                {/* Header banner */}
-                <div className="bg-slate-800 text-white text-center py-2 px-4">
+                {/* Company branding */}
+                <PrestairBrandHeader />
+
+                {/* Quotation banner */}
+                <div className="bg-slate-700 text-white text-center py-2 px-4">
                   <p className="font-bold text-sm">{partyName || "Party Name"}</p>
-                  <p className="text-slate-300 text-xs">{quotationNo} &nbsp;|&nbsp; {date}</p>
+                  <p className="text-slate-300 text-xs">{quotationNo} &nbsp;|&nbsp; {fmtDate(date)}</p>
                 </div>
 
                 {/* Subject row */}
@@ -371,18 +600,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   <span className="text-slate-400 font-normal">Subject: </span>{subject}
                 </div>
 
+                <datalist id="quotation-item-name-options">
+                  {itemNameOptions.map((entry) => (
+                    <option key={entry.id} value={entry.item_name} />
+                  ))}
+                </datalist>
+                {itemNameLoadError && (
+                  <p role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                    Item Name autofill is unavailable: {itemNameLoadError}
+                  </p>
+                )}
+
                 {/* ── Items Table ── */}
-                <div className="overflow-x-auto">
+                <div className="max-h-[52vh] overflow-auto">
                   <table className="w-full border-collapse" style={{ fontSize:"11px" }}>
-                    <thead>
+                    <thead className="sticky top-0 z-20 bg-slate-700 shadow-sm">
                       <tr className="bg-slate-700 text-white">
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:42}}>SL NO</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-left" style={{width:90}}>ITEM CODE</th>
-                        <th className="border border-slate-600 px-3 py-2.5 text-left">DESCRIPTION</th>
+                        <th className="border border-slate-600 px-3 py-2.5 text-left">ITEM NAME</th>
+                        <th className="border border-slate-600 px-3 py-2.5 text-left" style={{width:220, minWidth:220}}>ADDITIONAL DESCRIPTION</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
-                        <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:90}}>DISCOUNT</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:100}}>RATE (₹)</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:110}}>AMOUNT (₹)</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:30}}>🗑</th>
@@ -391,79 +631,100 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                     <tbody>
                       {itemRows.map((row, idx) => {
                         const amt = rowAmt(row);
+                        if (row.rowType === "section") {
+                          return (
+                            <tr key={row.uid} className="group bg-blue-50">
+                              <td colSpan={9} className="border border-blue-200 px-3 py-2">
+                                <div className="flex items-center gap-3">
+                                  <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-blue-700">Section</span>
+                                  <input
+                                    value={row.desc}
+                                    onChange={(event) => updateItemRow(row.uid, "desc", event.target.value)}
+                                    placeholder="Enter section heading, e.g. Display"
+                                    className="w-full rounded border border-blue-200 bg-white px-3 py-1.5 text-sm font-bold text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  />
+                                </div>
+                              </td>
+                              <td className="border border-blue-200 px-1 py-1 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteRow(row.uid)}
+                                  className="text-slate-400 transition-colors hover:text-red-600"
+                                  title="Remove section"
+                                  aria-label="Remove section"
+                                >
+                                  ×
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        }
                         return (
                           <tr key={row.uid}
                             className="group hover:bg-blue-50 transition-colors"
                             style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}>
 
                             {/* SL NO */}
-                            <td className="border border-slate-100 px-1 py-1 text-center">
-                              <input value={row.slNo}
-                                onChange={(e) => updateItemRow(row.uid,"slNo",e.target.value)}
-                                className="w-9 border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-bold text-slate-700" />
+                            <td className="border border-slate-100 px-1 py-1 text-center font-bold text-black">
+                              {row.slNo}
                             </td>
 
                             {/* ITEM CODE */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.itemCode}
                                 onChange={(e) => updateItemRow(row.uid,"itemCode",e.target.value)}
-                                placeholder="e.g. DC-01"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-slate-700" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-black" />
                             </td>
 
-                            {/* DESCRIPTION */}
+                            {/* ITEM NAME */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.desc}
+                                list="quotation-item-name-options"
+                                autoComplete="off"
                                 onChange={(e) => updateItemRow(row.uid,"desc",e.target.value)}
-                                placeholder="Enter description…"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-700" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                            </td>
+
+                            {/* ADDITIONAL DESCRIPTION */}
+                            <td className="border border-slate-100 px-1 py-1" style={{minWidth:220}}>
+                              <input value={row.additionalColumn}
+                                onChange={(e) => updateItemRow(row.uid,"additionalColumn",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
                             </td>
 
                             {/* SIZE */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.size}
                                 onChange={(e) => updateItemRow(row.uid,"size",e.target.value)}
-                                placeholder='e.g. 60"×28"×50"'
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-500" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
                             </td>
 
                             {/* HSN CODE */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.hsn}
                                 onChange={(e) => updateItemRow(row.uid,"hsn",e.target.value)}
-                                placeholder="7323"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-center text-slate-600" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-center text-black" />
                             </td>
 
                             {/* QTY */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input type="number" min={0} value={row.qty}
                                 onChange={(e) => updateItemRow(row.uid,"qty",e.target.value)}
-                                placeholder="1"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-semibold text-slate-800" />
-                            </td>
-
-                            {/* DISCOUNT per row */}
-                            <td className="border border-slate-100 px-1 py-1">
-                              <input type="number" min={0} value={row.discount}
-                                onChange={(e) => updateItemRow(row.uid,"discount",e.target.value)}
-                                placeholder="0"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-slate-700" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-semibold text-black" />
                             </td>
 
                             {/* RATE */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input type="number" min={0} value={row.rate}
                                 onChange={(e) => updateItemRow(row.uid,"rate",e.target.value)}
-                                placeholder="NQ"
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-slate-800" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-black" />
                             </td>
 
                             {/* AMOUNT — auto calculated */}
-                            <td className="border border-slate-100 px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                            <td className="border border-slate-100 px-2 py-1.5 text-right font-mono font-bold text-black">
                               {amt !== null
-                                ? <span className="text-green-700">{fmt(amt)}</span>
-                                : <span className="text-slate-300 font-normal text-[10px]">auto</span>}
+                                ? <span className="text-black">{fmt(amt)}</span>
+                                : <span className="text-black font-normal">—</span>}
                             </td>
 
                             {/* DELETE ROW */}
@@ -480,30 +741,115 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                 </div>
 
                 {/* ── Add More button ── */}
-                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50">
-                  <button onClick={addRow}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-500 hover:bg-blue-50 text-xs font-bold transition-all active:scale-95">
-                    <span className="text-base leading-none">+</span>
-                    Add More Item
-                  </button>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={addRow}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-500 hover:bg-blue-50 text-xs font-bold transition-all active:scale-95">
+                      <span className="text-base leading-none">+</span>
+                      Add More Item
+                    </button>
+                    <button onClick={addSection}
+                      className="flex items-center gap-2 rounded-lg border-2 border-dashed border-violet-300 px-4 py-2 text-xs font-bold text-violet-700 transition-all hover:border-violet-500 hover:bg-violet-50 active:scale-95">
+                      <span className="text-base leading-none">+</span>
+                      Add Section
+                    </button>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {itemNameOptions.length} Item Name option{itemNameOptions.length === 1 ? "" : "s"}
+                  </span>
                 </div>
 
                 {/* ── Totals ── */}
                 <div className="border-t-2 border-slate-300">
-                  {([
-                    ["TOTAL (GROSS)",      gross,        "bg-yellow-50  text-yellow-900 font-bold"],
-                    ["LESS – DISCOUNT",    overallDisc,  "bg-orange-50  text-orange-700"],
-                    ["TOTAL AFTER DISC.",  afterDiscount,"bg-orange-100 text-orange-900 font-bold"],
-                    ["GST @ 18%",          gst,          "bg-red-50     text-red-700"],
-                    ["GRAND TOTAL",        grandTotal,   "bg-green-600  text-white font-bold text-sm"],
-                  ] as [string,number,string][]).map(([label,val,cls]) => (
-                    <div key={label} className={`flex justify-between items-center px-6 py-2 border-b border-slate-200 ${cls}`}>
-                      <span className="tracking-wide text-xs font-semibold">{label}</span>
-                      <span className="font-mono font-bold">₹ {fmt(val)}</span>
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-yellow-50 px-6 py-2 font-bold text-yellow-900">
+                    <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT</span>
+                    <span className="font-mono font-bold">₹ {fmt(gross)}</span>
+                  </div>
+                  {seasonalEnabled && (
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
+                      <label htmlFor="seasonal-discount-amount" className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</label>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">₹</span>
+                        <input
+                          id="seasonal-discount-amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={seasonalDiscount}
+                          onChange={(event) => setSeasonalDiscount(event.target.value)}
+                          placeholder="Enter amount"
+                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        />
+                      </div>
                     </div>
-                  ))}
-                  <div className="px-6 py-2 text-[10px] text-slate-400 italic bg-slate-50">
-                    TRANSPORTATION CHARGES AS ACTUAL
+                  )}
+                  {specialEnabled && (
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
+                      <label htmlFor="special-discount-amount" className="text-xs font-semibold tracking-wide">SPECIAL DISCOUNT</label>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">₹</span>
+                        <input
+                          id="special-discount-amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={specialDiscount}
+                          onChange={(event) => setSpecialDiscount(event.target.value)}
+                          placeholder="Enter amount"
+                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {(seasonalEnabled || specialEnabled) && (
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
+                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
+                      <span className="font-mono font-bold">₹ {fmt(afterDiscount)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
+                    <label htmlFor="transportation-charges" className="text-xs font-semibold tracking-wide">TRANSPORTATION CHARGES</label>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">₹</span>
+                      <input
+                        id="transportation-charges"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={transportationCharges}
+                        onChange={(event) => setTransportationCharges(event.target.value)}
+                        placeholder="0"
+                        className="w-36 rounded border border-cyan-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
+                    <label htmlFor="packing-charges" className="text-xs font-semibold tracking-wide">PACKING CHARGES</label>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">₹</span>
+                      <input
+                        id="packing-charges"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={packingCharges}
+                        onChange={(event) => setPackingCharges(event.target.value)}
+                        placeholder="0"
+                        className="w-36 rounded border border-cyan-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-100 px-6 py-2 font-bold text-cyan-950">
+                    <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE BEFORE GST</span>
+                    <span className="font-mono font-bold">₹ {fmt(taxableAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
+                    <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
+                    <span className="font-mono font-bold">₹ {fmt(gst)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
+                    <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
+                    <span className="font-mono font-bold">₹ {fmt(grandTotal)}</span>
                   </div>
                 </div>
 
@@ -517,7 +863,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
         <div className="flex-shrink-0 bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between">
           <p className="text-xs text-slate-500">
             {step === 2 && (
-              <><strong className="text-slate-700">{itemRows.length}</strong> items &nbsp;·&nbsp;
+              <><strong className="text-slate-700">{itemCount}</strong> items &nbsp;·&nbsp;
               Grand Total: <strong className="text-green-700 text-sm">₹ {fmt(grandTotal)}</strong></>
             )}
             {step === 1 && <span className="text-blue-600 font-semibold">Step 1 of 2 — Fill party details then click Next</span>}
@@ -526,19 +872,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
             {/* Download buttons in bottom bar on step 2 */}
             {step === 2 && (
               <QuotationDownload
-                quotation={initialData!}
+                quotation={initialData ?? undefined}
                 partyName={partyName}
+                partyAddress={partyAddress}
+                partyGST={partyGST}
+                attention={attention}
                 quotationNo={quotationNo}
                 date={date}
                 subject={subject}
                 rows={itemRows.map((r) => ({
-                  slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  rowType: r.rowType, slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
                   size: r.size, hsn: r.hsn, qty: r.qty,
-                  discount: r.discount, rate: r.rate,
+                  additionalColumn: r.additionalColumn, rate: r.rate,
                   amt: rowAmt(r),
+                  section: r.rowType === "section" ? r.desc : undefined,
                 }))}
                 gross={gross}
-                discount={overallDisc}
+                discounts={{
+                  seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
+                  special: { enabled: specialEnabled, amount: specialAmount },
+                  legacyAmount: 0,
+                  transportationAmount,
+                  packingAmount,
+                }}
                 afterDiscount={afterDiscount}
                 gst={gst}
                 grandTotal={grandTotal}

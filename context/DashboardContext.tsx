@@ -27,6 +27,7 @@ type SectionTotal = {
 type DashboardContextValue = {
   items: QuotationItem[];
   addItem: (item: QuotationItem) => void;
+  updateItem: (id: string, updated: QuotationItem) => void;
   removeItem: (id: string) => void;
   // derived
   sectionTotals: SectionTotal[];
@@ -45,6 +46,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((item: QuotationItem) => {
     setItems((prev) => [...prev, item]);
+  }, []);
+
+  const updateItem = useCallback((id: string, updated: QuotationItem) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
   }, []);
 
   const removeItem = useCallback((id: string) => {
@@ -83,7 +88,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   return (
     <DashboardContext.Provider
-      value={{ items, addItem, removeItem, sectionTotals, top10, gross, gst, grandTotal }}
+      value={{ items, addItem, updateItem, removeItem, sectionTotals, top10, gross, gst, grandTotal }}
     >
       {children}
     </DashboardContext.Provider>

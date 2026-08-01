@@ -2,26 +2,39 @@
 
 import { useState } from "react";
 import { SavedQuotation } from "@/context/QuotationContext";
+import { QuotationDiscounts } from "@/lib/quotationAudit";
 
 type Props = {
-  quotation:     SavedQuotation;
+  quotation?:    SavedQuotation;
   partyName:     string;
+  partyAddress:  string;
+  partyGST:      string;
+  attention:     string;
   quotationNo:   string;
   date:          string;
   subject:       string;
   rows:          RowData[];
   gross:         number;
-  discount:      number;
+  discounts:     QuotationDiscounts;
   afterDiscount: number;
   gst:           number;
   grandTotal:    number;
 };
 
 type RowData = {
+  rowType?: "item" | "section";
   slNo: string; itemCode: string; desc: string; size: string;
-  hsn: string; qty: string; discount: string; rate: string; amt: number | null;
+  hsn: string; qty: string; additionalColumn: string; rate: string; amt: number | null;
   section?: string;
 };
+
+// Format stored YYYY-MM-DD to DD/MM/YYYY for display
+function fmtDateDisplay(dateStr: string): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  if (!y || !m || !d) return dateStr;
+  return `${d}/${m}/${y}`;
+}
 
 const fmtNum = (n: number) => n.toLocaleString("en-IN");
 
@@ -42,62 +55,72 @@ function detectSection(itemCode: string): string {
 const TERMS = [
   "1. Rates: - valid for 10 days.",
   "2. Delivery Period: - 8 WEEKS. (However, under unavoidable circumstances like natural calamities, war strikes etc., we shall not be liable for any cancellation or delay in meeting delivery date.)",
-  "3. Taxes: - G.S.T & other taxes will be charged extra as applicable by Central Govt./State Govt. from time to time. Transportation/Forwarding/Loading/Unloading: Extra and to be paid by client.",
-  "4. Transportation/Forwarding/Loading/Unloading: - Extra on actual, paid by client. Client may also arrange their own vehicle for pickup.",
+  "3. Taxes: - G.S.T & Other taxes will be charged extra as applicable by Central Govt./State Govt. time to time.",
+  "4. Transportation/Forwarding/Loading/Unloading: - Extra on actual paid by client. Client may also arrange their own vehicle for pickup.",
   "5. Way bill/Road Permit if required, to be arranged by the Client.",
-  "6. Packing: (a) Shrink roll/thermocol packing FOC.  (b) Wooden crate/cargo box packing charged extra on actual if required.",
-  "7. Site work: - All civil/masonry/wooden/electrical work to be done by client at their own cost. Rates: ex-works, Delhi.",
-  "8. Payment Terms: (a) 60% advance along with confirmed purchase order and balance 40% before delivery from our warehouse.  (b) 100% advance for Imported Equipment.",
-  "9. Jurisdiction: Noida (U.P)",
-  "10. The order is/are accepted subject to strikes, lockouts, accidents, fire, riots, civil commotion & other causes beyond our control.",
+  "6. Packing: (a) Shrink roll/thermocol packing FOC. (b) Wooden crate/cargo box packing charge extra on actual if required.",
+  "7. Site work: - All civil/masonry/wooden/electrical work done by client at his own cost. Rates: ex-works, Delhi.",
+  "8. Payment Terms: (a) 60% advance along with confirm purchase order and balance 40% payment before delivery from our warehouse. (b) 100% advance along with confirm purchase order for Imported Equipment.",
+  "9. Jurisdiction Noida (U.P)",
+  "10. The order is/are accepted, subject to strikes, lockout, accidents, fire, riots, civil commotion & other causes beyond our control.",
   "11. The lodging and boarding of the mechanic team will be arranged by the client at their own cost outside Delhi.",
-  "12. Once the order is placed, it cannot be cancelled.",
-  "13. Installation: Installation Requirement - Exact utility requirements (eg. Electrical, gas, steam connections & load at site) shall be advised after receipt of confirmed purchase order. Customer must ensure the provisions of all utilities exactly as per the information provided before the visit of technician at site. If the installation could not be completed due to any lack in site requirement, the visit shall be considered as valid & any additional charges will be done on chargeable basis.",
-  "14. Warranty Period: (a) 12 months by the manufacturer for defective parts from the date of invoicing. (b) Excludes consumables and wear & tear parts/components like seals, digital controllers, gaskets etc. (c) The warranty will not be applicable if any component gets damaged due to voltage fluctuation, mishandling by operator. (d) Warranty will be null and void if equipment is either installed or repaired by person/s not authorized by PRESTAIR.",
+  "12. Once the order is placed cannot be cancelled.",
+  "13. Installation- Installation Requirement: Exact utility requirements (eg. Electrical, gas, steam connections & load at site) shall be advised after receipt of confirmed purchase order. Customer must ensure the provisions of all utilities exactly as per the information provided before the visit of technician at site. If the installation could not be completed in case of any lack in site requirement, the visit shall be considered as valid & any additional charges will be done on chargeable basis.",
+  "14. Warranty Period: (a) 12 months by the manufacture for defective parts from the date of invoicing. (b) Exclude consumables and wear & tear parts/components like seals, digital controllers, gaskets etc. (c) The warranty will not be applicable if any component gets damaged due to voltage fluctuation, mishandling by operator. (d) Warranty will be null and void if equipment is either installed or repaired by person/s not authorized by PRESTAIR.",
   "15. Inspections: All equipment/material shall be dispatched only after inspection by your representative at our works. Inspection waiver: In case the client wants us to dispatch the equipment/material without inspection, then the client shall issue an inspection waiver certificate. Insurance: 2% on customer request.",
   "16. General Specifications:",
-  "  - All Frame Work: 32x32x3 Stainless Steel Angle.",
-  "  - Tops Of All Tables, Sinks, Burner Ranges: 16 Swg (1.5mm) Plastic Coated Prime finish SS Sheet 304 Grade.",
-  "  - Tops Of All UC ref: 18 Swg (1.2mm) Plastic Coated Prime finish SS Sheet 304 Grades with Puff insulation.",
-  "  - Sink Are Made Of 14 Swg 304 2B Polished.",
-  "  - All dish wash areas/Sink Tables: complete 304 S.S Plastic Coated Prime finish With Waste Fitted.",
-  "  - All cold tanks area: 0.8mm Plastic Coated Prime finish 304 SS Grade.",
-  "  - All hot tanks area: 1.2mm 304 SS Grade.",
-  "  - All Under Shelves: 18 Swg (1.2mm) Plastic Coated Prime finish SS Sheet, Grade J4.",
-  "  - Drawers: 20 Swg (1mm) Plastic Coated Prime finish SS Sheet, Grade J4.",
-  "  - Covering: 20 Swg (1mm) SS Sheet Plastic Coated Prime finish Grade J4.",
-  "  - Legs: 40x40mm SS Pipe 1.2mm, Polished J4 grades With Adjustable Bullet Feet PVC.",
-  "  - Ex Hoods: 20 Swg (1mm), Plastic Coated Prime finish SS J4 grade with baffle filters, LED Lights.",
-  "  - Cold Unit: Compressor Emerson/Tecumseh.",
-  "  - All Burners Available In LPG/PNG.",
-  "  - All Burner Ranges With Pilots And Burners Pan Supports Heavy Duty as per drawings.",
-  "  - For Display counters: Front & Top Glass 8mm, Side Glass 10mm and Shelves 10mm.",
+  "  .All Frame Work -32x32x3 Stainless Steel Angle.",
+  "  .Tops Of All Tables, Sinks, Burner Ranges- 16 Swg (1.5mm) Plastic Coated Prime finish Stainless Steel Sheet 304 Grade.",
+  "  .Tops Of All UC ref- 18 Swg (1.2mm) Plastic Coated Prime finish Stainless Steel Sheet 304 Grades with Puff insulation.",
+  "  .Sink Are Made Of 14 Swg 304 2B Polished.",
+  "  .All dish wash areas/Sink Tables Are complete 304 S.S Plastic Coated Prime finish With Waste Fitted.",
+  "  .All cold tanks area 0.8mm Plastic Coated Prime finish 304 Ss Grade.",
+  "  .All hot tanks area 1.2mm 304 Ss Grade.",
+  "  .All Under Shelves 18 Swg (1.2mm) Plastic Coated Prime finish Stainless Steel Sheet, Grade- J4.",
+  "  .Drawers -20 Swg (1mm) Plastic Coated Prime finish Stainless Steel Sheet, Grade J4.",
+  "  .Covering Of 20 Swg (1mm) Stainless Steel Sheet Plastic Coated Prime finish Grade J4.",
+  "  .Legs 40x40mm Ss Pipe 1.2mm, Polished J4 grades With Adjustable Bullet Feet PVC.",
+  "  .Ex Hoods- 20 swg (1mm), Plastic Coated Prime finish Stainless Steel J4 grade with baffle filters, LED Lights.",
+  "  .Cold Unit -Compressor Emerson/Tecumseh.",
+  "  .All Burners Are Available In LPG/PNG.",
+  "  .All Burner Ranges Are With Pilots And Burners Pan Supports Heavy Duty as per drawings.",
+  "  .For Display counters-Front & Top Glass 8mm, Side Glass 10mm and Shelves 10mm.",
 ];
 
 // ── EXCEL ─────────────────────────────────────────────────────────────────────
 async function downloadExcel(props: Props) {
   const XLSX = await import("xlsx");
   const wb   = XLSX.utils.book_new();
-
   const data: unknown[][] = [
     ["PRESTAIR SYSTEMS LLP"],
     ["B-127 Phase-2, Noida, Uttar Pradesh 201305  |  GST: 09AATFP8342B1ZX  |  Since 1982"],
     [],
     ["M/S:", props.partyName],
-    ["Date:", props.date],
+    ["Date:", fmtDateDisplay(props.date)],
     ["Quotation No.:", props.quotationNo],
     ["Subject:", props.subject],
     [],
-    ["SL NO","ITEM CODE","DESCRIPTION","SIZE","HSN CODE","QTY","DISCOUNT (₹)","RATE (₹)","AMOUNT (₹)"],
-    ...props.rows.map((r) => [r.slNo, r.itemCode, r.desc, r.size, r.hsn, r.qty, r.discount, r.rate, r.amt ?? "NQ"]),
+    ["SL NO","ITEM CODE","ITEM NAME","ADDITIONAL DESCRIPTION","SIZE","HSN CODE","QTY","RATE","AMOUNT"],
+    ...props.rows.map((r) => r.rowType === "section"
+      ? [r.desc || r.section || "Untitled Section", "", "", "", "", "", "", "", ""]
+      : [r.slNo, r.itemCode, r.desc, r.additionalColumn, r.size, r.hsn, r.qty, r.rate, r.amt ?? "NQ"]),
     [],
-    ["","","","","","","","TOTAL (GROSS)",           props.gross],
-    ["","","","","","","","LESS – DISCOUNT",          props.discount],
-    ["","","","","","","","TOTAL AFTER DISCOUNT",     props.afterDiscount],
+    ["","","","","","","","TOTAL AMOUNT", props.gross],
+    ...(props.discounts.seasonal.enabled
+      ? [["","","","","","","","SEASONAL DISCOUNT", props.discounts.seasonal.amount]]
+      : []),
+    ...(props.discounts.special.enabled
+      ? [["","","","","","","","SPECIAL DISCOUNT", props.discounts.special.amount]]
+      : []),
+    ...(props.discounts.legacyAmount > 0
+      ? [["","","","","","","","DISCOUNT", props.discounts.legacyAmount]]
+      : []),
+    ["","","","","","","","TOTAL AFTER DISCOUNT", props.afterDiscount],
+    ["","","","","","","","TRANSPORTATION CHARGES", props.discounts.transportationAmount],
+    ["","","","","","","","PACKING CHARGES", props.discounts.packingAmount],
+    ["","","","","","","","TAXABLE VALUE BEFORE GST", props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount],
     ["","","","","","","","GST @ 18%",                props.gst],
     ["","","","","","","","GRAND TOTAL",              props.grandTotal],
-    [],
-    ["TRANSPORTATION CHARGES AS ACTUAL"],
     [],
     ["TERMS & CONDITIONS:"],
     ...TERMS.map((t) => [t]),
@@ -107,360 +130,471 @@ async function downloadExcel(props: Props) {
     ["Account No: 4513086230  |  IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank, Sector 51 Noida"],
     ["GST: 09AATFP8342B1ZX"],
   ];
-
   const ws = XLSX.utils.aoa_to_sheet(data);
+  ws["!merges"] = props.rows.flatMap((row, index) => row.rowType === "section"
+    ? [{ s: { r: 9 + index, c: 0 }, e: { r: 9 + index, c: 8 } }]
+    : []);
   ws["!cols"] = [
-    { wch: 6 }, { wch: 12 }, { wch: 46 }, { wch: 18 },
-    { wch: 10 }, { wch: 5 }, { wch: 13 }, { wch: 14 }, { wch: 16 },
+    { wch: 6 }, { wch: 12 }, { wch: 32 }, { wch: 34 },
+    { wch: 18 }, { wch: 10 }, { wch: 5 }, { wch: 14 }, { wch: 16 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, "Quotation");
   XLSX.writeFile(wb, `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g,"-")}_${props.date}.xlsx`);
 }
 
-// ── PDF ───────────────────────────────────────────────────────────────────────
-async function downloadPDF(props: Props) {
-  const { default: jsPDF }     = await import("jspdf");
+// ── PDF (Matching original Prestair quotation format) ─────────────────────────
+async function buildQuotationPDF(props: Props) {
+  const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
-  // A4 Portrait for a clean look
-  const doc  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W    = 210;   // page width
-  const ML   = 12;    // left margin
-  const MR   = 198;   // right edge
-  const CW   = MR - ML; // content width
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W = 210;
+  const ML = 10;
+  const MR = 200;
+  const CW = MR - ML;
+  const PAGE_BOTTOM = 272;
+  const PAGE_TOP = 12;
 
-  // ── Page header (full-width dark band) ───────────────────────────────────
-  doc.setFillColor(22, 40, 70);
-  doc.rect(0, 0, W, 30, "F");
-
-  // Prestair Logo — stylized text (left)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(255, 255, 255);
-  doc.text("Prestair", ML, 11);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(160, 190, 230);
-  doc.text("Systems LLP", ML, 17);
-  doc.setDrawColor(100, 140, 200);
-  doc.line(ML, 18.5, ML + 32, 18.5);
-  doc.setFontSize(6);
-  doc.setTextColor(140, 170, 220);
-  doc.text("Commercial Food Service Equipments  |  Since 1982", ML, 22);
-
-  // ── Logo images helper (used both header & footer) ──────────────────────────
-  async function loadLogoDataUrl(file: string): Promise<string | null> {
+  // ── Helper: load raster image as a data URL ───────────────────────────────
+  // PDF generation intentionally uses PNG/JPEG only. Passing SVG data to
+  // jsPDF.addImage throws at runtime in browsers without the SVG plugin.
+  async function loadImg(file: string): Promise<string | null> {
     try {
-      const response = await fetch(`/logos/${file}`);
-      if (!response.ok) return null;
-      const blob = await response.blob();
-      return await new Promise<string>((resolve) => {
+      const res = await fetch(`/logos/${file}`);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (!/^image\/(png|jpe?g|webp)$/i.test(blob.type)) return null;
+
+      return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
       });
-    } catch { return null; }
-  }
-
-  const logoList = [
-    { file: "gacb.png", fmt: "PNG",  w: 10, h: 10 },
-    { file: "ce.jpg",   fmt: "JPEG", w: 12, h: 8  },
-    { file: "iaf.png",  fmt: "PNG",  w: 14, h: 10 },
-    { file: "qcs.png",  fmt: "PNG",  w: 14, h: 10 },
-    { file: "iso.png",  fmt: "PNG",  w: 10, h: 10 },
-    { file: "uaf.png",  fmt: "PNG",  w: 16, h: 8  },
-  ];
-
-  // Pre-load all logos
-  const logoData: (string | null)[] = [];
-  for (const l of logoList) { logoData.push(await loadLogoDataUrl(l.file)); }
-
-  // ── Header logos (top-right area) ─────────────────────────────────────────
-  let hlx = 130;
-  for (let i = 0; i < logoList.length; i++) {
-    if (logoData[i]) {
-      doc.addImage(logoData[i]!, logoList[i].fmt, hlx, 6, logoList[i].w, logoList[i].h);
+    } catch {
+      return null;
     }
-    hlx += logoList[i].w + 3;
   }
 
-  // Company info bottom line
+  // Load only raster logos so every addImage call is browser-safe.
+  const logoFiles = [
+    { file: "uaf.webp", fmt: "WEBP", w: 9, h: 9 },
+    { file: "ce.jpg", fmt: "JPEG", w: 9, h: 9 },
+    { file: "images.png", fmt: "PNG", w: 9, h: 9 },
+    { file: "iaf.png", fmt: "PNG", w: 9, h: 9 },
+    { file: "gacb.png", fmt: "PNG", w: 9, h: 9 },
+    { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
+  ];
+  // Load Prestair logo at full quality without any color processing
+  const prestairLogo = await loadImg("logo2-1.png");
+  const logos: (string | null)[] = [];
+  for (const l of logoFiles) logos.push(await loadImg(l.file));
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE 1 HEADER — matching original exactly
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Prestair Systems LLP logo — rendered at full quality without background
+  if (prestairLogo) {
+    doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
+  } else {
+    doc.setFont("helvetica", "bolditalic");
+    doc.setFontSize(17);
+    doc.setTextColor(37, 99, 235);
+    doc.text("Prestair", ML + 3, 12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
+  }
+
+  // Company details under the logo.
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235);
+  doc.text("Commercial Food Service Equipments", ML, 25.5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.setTextColor(180, 200, 240);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305  |  GST: 09AATFP8342B1ZX", ML, 27);
+  doc.setTextColor(60, 60, 60);
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 29);
+  doc.text("India", ML, 32);
 
-  // Quotation No + Date (right)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(200, 220, 255);
-  doc.text(`Quotation: ${props.quotationNo || "\u2014"}`, MR, 22, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(`Date: ${props.date}`, MR, 27, { align: "right" });
-
-  // ── Party info box ───────────────────────────────────────────────────────
-  let y = 36;
-  doc.setFillColor(246, 249, 255);
-  doc.roundedRect(ML, y, CW, 22, 2, 2, "F");
-  doc.setDrawColor(200, 210, 230);
-  doc.roundedRect(ML, y, CW, 22, 2, 2, "S");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(30, 58, 95);
-  doc.text("TO:", ML + 3, y + 5);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text(props.partyName.toUpperCase(), ML + 12, y + 5);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(70, 80, 100);
-  if (props.subject) {
-    const subjectLines = doc.splitTextToSize(`Sub: ${props.subject}`, CW - 10);
-    doc.text(subjectLines, ML + 3, y + 11);
+  // Certification logos top-right, without an enclosing border.
+  const logoBoxX = 130;
+  let lx = logoBoxX + 3;
+  for (let i = 0; i < logoFiles.length; i++) {
+    if (logos[i]) {
+      doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 6, logoFiles[i].w, logoFiles[i].h);
+    }
+    lx += logoFiles[i].w + 2.5;
   }
 
-  y += 27;
+  // Horizontal line below header
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.5);
+  doc.line(ML, 35, MR, 35);
 
-  // ── Items table ───────────────────────────────────────────────────────────
+  // Date and Quotation No
+  let y = 40;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Date:${fmtDateDisplay(props.date)}`, ML, y);
+  doc.text(`Quotation No: ${props.quotationNo}`, MR, y, { align: "right" });
+
+  // Party details
+  y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("M/S: " + props.partyName.toUpperCase(), ML, y);
+
+  // Address from the current form values
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  if (props.partyAddress) {
+    const addrLines = doc.splitTextToSize(props.partyAddress, 100);
+    doc.text(addrLines, ML, y);
+    y += addrLines.length * 4;
+  }
+  if (props.partyGST) {
+    doc.setFont("helvetica", "bold");
+    doc.text(`GST: ${props.partyGST}`, ML, y);
+    y += 5;
+  }
+
+  // Kind Attention
+  if (props.attention) {
+    y += 2;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text(`Kind Attention: ${props.attention.trim()}`, ML, y);
+    y += 5;
+  }
+
+  // Subject
+  y += 2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  const subLines = doc.splitTextToSize(`SUBJECT: ${props.subject}`, CW);
+  doc.text(subLines, ML, y);
+  y += subLines.length * 4 + 4;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ITEMS TABLE — matching original format with the additional item detail
+  // ══════════════════════════════════════════════════════════════════════════
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: ML },
-    head: [["#", "Item Code", "Description", "Size", "HSN", "Qty", "Disc (₹)", "Rate (₹)", "Amount (₹)"]],
+    head: [["SL NO", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
     body: (() => {
-      // Build body with section headers
-      const tableBody: (string | { content: string; colSpan: number; styles: object })[][] = [];
+      const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
       let lastSection = "";
-      props.rows.forEach((r, i) => {
-        // Detect section from item code prefix or section field
-        const section = r.section || detectSection(r.itemCode);
+      let insideExplicitSection = false;
+      props.rows.forEach((r) => {
+        if (r.rowType === "section") {
+          insideExplicitSection = true;
+          const heading = (r.desc || r.section || "Untitled Section").toUpperCase();
+          body.push([{
+            content: heading,
+            colSpan: 8,
+            styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [239, 246, 255], textColor: [30, 64, 175] },
+          }] as unknown as string[]);
+          lastSection = "";
+          return;
+        }
+        const section = insideExplicitSection
+          ? ""
+          : (r.section && r.section !== "Custom" ? r.section : detectSection(r.itemCode));
         if (section && section !== lastSection) {
-          // Add section header row
-          tableBody.push([{
+          body.push([{
             content: section.toUpperCase(),
-            colSpan: 9,
-            styles: { fillColor: [230, 240, 255], textColor: [22, 40, 70], fontStyle: "bold" as const, fontSize: 7, halign: "left" as const },
+            colSpan: 8,
+            styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
           }] as unknown as string[]);
           lastSection = section;
         }
-        tableBody.push([
-          String(i + 1),
-          r.itemCode || "\u2014",
-          r.desc     || "\u2014",
-          r.size     || "\u2014",
-          r.hsn      || "\u2014",
-          r.qty      || "1",
-          r.discount || "0",
-          r.rate     || "NQ",
+        body.push([
+          r.itemCode || "",
+          r.desc || "",
+          r.additionalColumn || "",
+          r.size || "",
+          r.hsn || "",
+          r.qty || "1",
+          r.rate || "NQ",
           r.amt !== null ? fmtNum(r.amt) : "NQ",
         ]);
       });
-      return tableBody;
+      return body;
     })(),
+
     headStyles: {
-      fillColor:   [22, 40, 70],
-      textColor:   [255, 255, 255],
-      fontStyle:   "bold",
-      fontSize:    7,
-      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
-      valign:      "middle",
-      halign:      "center",
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 7.5,
+      lineWidth: 0.15,
+      lineColor: [0, 0, 0],
+      halign: "center",
+      valign: "middle",
+      cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 },
     },
     bodyStyles: {
-      fontSize:    7,
-      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
-      textColor:   [30, 40, 60],
-      valign:      "middle",
+      fontSize: 7.5,
+      textColor: [0, 0, 0],
+      lineWidth: 0.15,
+      lineColor: [0, 0, 0],
+      cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
+      valign: "middle",
     },
-    alternateRowStyles: { fillColor: [245, 248, 255] },
-    tableWidth: CW,
     columnStyles: {
-      0: { cellWidth: 7,   halign: "center",  fontStyle: "bold" },
-      1: { cellWidth: 19,  halign: "center",  fontStyle: "bold" },
-      2: { cellWidth: 68,  halign: "left"   },
-      3: { cellWidth: 22,  halign: "center" },
-      4: { cellWidth: 13,  halign: "center" },
-      5: { cellWidth: 8,   halign: "center" },
-      6: { cellWidth: 17,  halign: "right"  },
-      7: { cellWidth: 17,  halign: "right"  },
-      8: { cellWidth: 15,  halign: "right",  fontStyle: "bold" },
+      0: { cellWidth: 12, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 26, halign: "center" },
+      2: { cellWidth: 72, halign: "left" },
+      3: { cellWidth: 22, halign: "center" },
+      4: { cellWidth: 14, halign: "center" },
+      5: { cellWidth: 10, halign: "center" },
+      6: { cellWidth: 16, halign: "center" },
+      7: { cellWidth: 18, halign: "center", fontStyle: "bold" },
     },
+    tableWidth: CW,
+    theme: "grid",
     didDrawPage: (data) => {
-      // Re-draw mini header on every page
-      doc.setFillColor(22, 40, 70);
-      doc.rect(0, 0, W, 7, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.5);
-      doc.setTextColor(200, 220, 255);
-      doc.text("PRESTAIR SYSTEMS LLP", ML, 5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(160, 190, 240);
-      doc.text(`Quotation: ${props.quotationNo || "—"}  |  ${props.partyName}`, 105, 5, { align: "center" });
-      doc.text(`Page ${data.pageNumber}`, MR, 5, { align: "right" });
+      if (data.pageNumber === 1) return;
+      // Footer logos on each page
+      drawFooterLogos(doc, logos, logoFiles, W, ML, MR);
     },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterTable = (doc as any).lastAutoTable.finalY + 5;
+  let ty = ((doc as any).lastAutoTable?.finalY ?? y + 10) + 0;
 
-  // ── Totals section ────────────────────────────────────────────────────────
-  // Check if enough space; if not, add page
-  const totalsH = 40;
-  let ty = afterTable;
-  if (ty + totalsH > 270) {
-    doc.addPage();
-    ty = 15;
-  }
+  // ══════════════════════════════════════════════════════════════════════════
+  // TOTALS — right-aligned, matching original
+  // ══════════════════════════════════════════════════════════════════════════
+  const safeNum = (n: number) => (isNaN(n) || n === null || n === undefined) ? 0 : n;
 
-  // Totals table — right-aligned, clean two-column layout
-  const totalsLeft  = 120;
-  const totalsRight = MR;
-  const totalsWidth = totalsRight - totalsLeft;
-  const rowH = 6.5;
+  if (ty + 50 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
 
-  const totalsRows: [string, number, [number,number,number], [number,number,number], boolean][] = [
-    ["TOTAL (GROSS)",       props.gross,        [254,252,232], [92, 60, 10],   false],
-    ["LESS – DISCOUNT",     props.discount,     [255,247,237], [154,52,18],    false],
-    ["TOTAL AFTER DISCOUNT",props.afterDiscount,[255,247,237], [154,52,18],    true ],
-    ["GST @ 18%",           props.gst,          [254,242,242], [153,27,27],    false],
-    ["GRAND TOTAL",         props.grandTotal,   [22, 101,52],  [255,255,255],  true ],
-  ];
-
-  totalsRows.forEach(([label, val, bg, fg, bold]) => {
-    doc.setFillColor(...bg);
-    doc.rect(totalsLeft, ty - rowH + 1.5, totalsWidth, rowH, "F");
-    doc.setDrawColor(200, 210, 220);
-    doc.rect(totalsLeft, ty - rowH + 1.5, totalsWidth, rowH, "S");
-    doc.setTextColor(...fg);
-    doc.setFontSize(bold ? 8.5 : 7.5);
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.text(label, totalsLeft + 3, ty);
-    doc.text(`Rs. ${fmtNum(val)}`, totalsRight - 3, ty, { align: "right" });
-    ty += rowH;
+  // Totals using autoTable for clean borders — 2 explicit columns matching items table width
+  autoTable(doc, {
+    startY: ty,
+    margin: { left: ML, right: ML },
+    body: [
+      ["TOTAL AMOUNT", fmtNum(safeNum(props.gross))],
+      ...(props.discounts.seasonal.enabled ? [["SEASONAL DISCOUNT", fmtNum(safeNum(props.discounts.seasonal.amount))]] : []),
+      ...(props.discounts.special.enabled ? [["SPECIAL DISCOUNT", fmtNum(safeNum(props.discounts.special.amount))]] : []),
+      ...(props.discounts.legacyAmount > 0 ? [["DISCOUNT", fmtNum(safeNum(props.discounts.legacyAmount))]] : []),
+      ["TOTAL AFTER DISCOUNT", fmtNum(safeNum(props.afterDiscount))],
+      ["TRANSPORTATION CHARGES", fmtNum(safeNum(props.discounts.transportationAmount))],
+      ["PACKING CHARGES", fmtNum(safeNum(props.discounts.packingAmount))],
+      ["TAXABLE VALUE BEFORE GST", fmtNum(safeNum(props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount))],
+      ["GST 18%", fmtNum(safeNum(props.gst))],
+      ["GRAND TOTAL", fmtNum(safeNum(props.grandTotal))],
+    ],
+    columnStyles: {
+      0: { cellWidth: CW - 18, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 18, halign: "right", fontStyle: "bold" },
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [0, 0, 0],
+      lineWidth: 0.15,
+      lineColor: [0, 0, 0],
+      cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 },
+    },
+    tableWidth: CW,
+    theme: "grid",
   });
 
-  ty += 4;
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7);
-  doc.setTextColor(120, 120, 120);
-  doc.text("* Transportation charges as actual.", ML, ty);
-  doc.text("* All prices are in Indian Rupees (INR).", ML, ty + 4);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ty = ((doc as any).lastAutoTable?.finalY ?? ty + 30) + 8;
 
-  // ── Terms & Conditions ────────────────────────────────────────────────────
-  ty += 12;
-  if (ty + 8 > 270) { doc.addPage(); ty = 15; }
+  // ══════════════════════════════════════════════════════════════════════════
+  // TERMS & CONDITIONS — matching original style
+  // ══════════════════════════════════════════════════════════════════════════
+  if (ty + 10 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
 
-  // Section header
-  doc.setFillColor(22, 40, 70);
-  doc.rect(ML, ty - 3, CW, 7, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(255, 255, 255);
-  doc.text("TERMS & CONDITIONS", ML + 3, ty + 1.5);
-  ty += 9;
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Terms & Conditions:", ML, ty);
+  doc.setLineWidth(0.4);
+  doc.line(ML, ty + 1, ML + 45, ty + 1); // underline
+  ty += 6;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.8);
-  doc.setTextColor(40, 50, 70);
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
 
   TERMS.forEach((line) => {
-    const split = doc.splitTextToSize(line, CW - 2);
-    if (ty + split.length * 4 > 280) {
+    // Bold the numbered headings
+    const isBold = /^\d+\./.test(line.trim()) && !line.trim().startsWith("  ");
+    doc.setFont("helvetica", isBold ? "bold" : "normal");
+    const split = doc.splitTextToSize(line, CW - 4);
+    const blockH = split.length * 3.6 + 1;
+    if (ty + blockH > PAGE_BOTTOM) {
       doc.addPage();
-      ty = 15;
+      ty = PAGE_TOP;
     }
-    doc.text(split, ML, ty);
-    ty += split.length * 4.2 + 0.8;
+    doc.text(split, ML + 2, ty);
+    ty += blockH;
   });
 
-  // ── Bank Details ──────────────────────────────────────────────────────────
-  ty += 4;
-  if (ty + 18 > 280) { doc.addPage(); ty = 15; }
+  // ══════════════════════════════════════════════════════════════════════════
+  // BANK DETAILS — matching original
+  // ══════════════════════════════════════════════════════════════════════════
+  ty += 6;
+  if (ty + 40 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
 
-  doc.setFillColor(240, 245, 255);
-  doc.roundedRect(ML, ty - 3, CW, 16, 2, 2, "F");
-  doc.setDrawColor(190, 210, 240);
-  doc.roundedRect(ML, ty - 3, CW, 16, 2, 2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text("BANK DETAILS", ML, ty);
+  doc.setLineWidth(0.4);
+  doc.line(ML, ty + 1, ML + 32, ty + 1);
+  ty += 5;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(22, 40, 70);
-  doc.text("BANK DETAILS", ML + 3, ty + 2);
+  const bankLines = [
+    "ACCOUNT NAME- PRESTAIR SYSTEMS LLP",
+    "ACCOUNT NO - 4513086230",
+    "ACCOUNT TYPE- CURRENT ACCOUNT",
+    "IFSC CODE-KKBK0000154",
+    "BANK - KOTAK MAHINDRA BANK",
+    "BRANCH - SECTOR 51 NOIDA",
+    "",
+    "GST NO-09AATFP8342B1ZX",
+  ];
+  bankLines.forEach((line) => {
+    doc.text(line, ML, ty);
+    ty += 4;
+  });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(40, 50, 70);
-  doc.text("Account Name: Prestair Systems LLP  |  Account No: 4513086230", ML + 3, ty + 7);
-  doc.text("IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank  |  Branch: Sector 51, Noida", ML + 3, ty + 11);
+  // ══════════════════════════════════════════════════════════════════════════
+  // SIGNATURE — "For Prestair Systems LLP"
+  // ══════════════════════════════════════════════════════════════════════════
+  ty += 8;
+  if (ty + 20 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
 
-  // ── Footer on last page ───────────────────────────────────────────────────
-  // Get last page
-  const lastPage = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
-  doc.setPage(lastPage);
-
-  // "For Prestair Systems LLP" + "Authorised Signatory" — fixed position
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(22, 40, 70);
-  doc.text("For Prestair Systems LLP", MR, 252, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(100, 110, 130);
-  doc.text("Authorised Signatory", MR, 258, { align: "right" });
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text("For Prestair Systems LLP", ML, ty);
 
-  // ── Footer logos (bottom, centered) ─────────────────────────────────────────
-  const logoConfigs = logoList;
-  const logoFixedY = 268;
-  const totalLogoWidth = logoConfigs.reduce((s, l) => s + l.w, 0) + (logoConfigs.length - 1) * 5;
-  let lx = (W - totalLogoWidth) / 2;
-
-  doc.setDrawColor(200, 215, 240);
-  doc.line(ML, logoFixedY - 2, MR, logoFixedY - 2);
-
-  for (let i = 0; i < logoConfigs.length; i++) {
-    if (logoData[i]) {
-      doc.addImage(logoData[i]!, logoConfigs[i].fmt, lx, logoFixedY, logoConfigs[i].w, logoConfigs[i].h);
-    }
-    lx += logoConfigs[i].w + 5;
-  }
-
-  // Page footer line on every page
+  // ══════════════════════════════════════════════════════════════════════════
+  // FOOTER LOGOS — on every page, centered at bottom
+  // ══════════════════════════════════════════════════════════════════════════
   const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setDrawColor(200, 210, 230);
-    doc.line(ML, 288, MR, 288);
-    doc.setFontSize(6);
-    doc.setTextColor(150, 160, 180);
-    doc.text("Prestair Systems LLP  |  B-127 Phase-2, Noida, UP 201305  |  GST: 09AATFP8342B1ZX", ML, 292);
-    doc.text(`Page ${i} of ${pageCount}`, MR, 292, { align: "right" });
+    drawFooterLogos(doc, logos, logoFiles, W, ML, MR);
   }
 
-  doc.save(`Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g,"-")}_${props.date}.pdf`);
+  return doc;
+}
+
+function quotationFileName(props: Props, extension: "pdf" | "xlsx") {
+  const base = (props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g, "-");
+  return `Quotation_${base}_${props.date}.${extension}`;
+}
+
+async function downloadPDF(props: Props) {
+  const doc = await buildQuotationPDF(props);
+  doc.save(quotationFileName(props, "pdf"));
+}
+
+function propsFromSavedQuotation(quotation: SavedQuotation): Props {
+  return {
+    quotation,
+    partyName: quotation.partyName,
+    partyAddress: quotation.partyAddress,
+    partyGST: quotation.partyGST,
+    attention: quotation.attention,
+    quotationNo: quotation.quotationNo,
+    date: quotation.date,
+    subject: quotation.subject,
+    rows: quotation.rows.map((row, index) => ({
+      rowType: row.rowType,
+      slNo: row.rowType === "section" ? "" : String(quotation.rows.slice(0, index + 1).filter((entry) => entry.rowType !== "section").length),
+      itemCode: row.id,
+      desc: row.desc,
+      size: row.size,
+      hsn: row.hsn,
+      qty: String(row.qty),
+      additionalColumn: row.additionalColumn,
+      rate: row.rate === null ? "" : String(row.rate),
+      amt: row.amt,
+      section: row.section,
+    })),
+    gross: quotation.gross,
+    discounts: quotation.discounts,
+    afterDiscount: quotation.afterDiscount,
+    gst: quotation.gst,
+    grandTotal: quotation.grandTotal,
+  };
+}
+
+export async function printSavedQuotation(quotation: SavedQuotation, printWindow: Window) {
+  if (printWindow.closed) throw new Error("The print window was closed.");
+  const doc = await buildQuotationPDF(propsFromSavedQuotation(quotation));
+  doc.autoPrint();
+  const pdfUrl = URL.createObjectURL(doc.output("blob"));
+  printWindow.location.replace(pdfUrl);
+  window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 120_000);
+}
+
+// Helper: draw footer logos centered at bottom of page
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawFooterLogos(doc: any, logos: (string | null)[], logoFiles: { file: string; fmt: string; w: number; h: number }[], W: number, ML: number, MR: number) {
+  const footerY = 286;
+  const gap = 4;
+  const totalW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * gap;
+  let x = (W - totalW) / 2;
+  for (let i = 0; i < logoFiles.length; i++) {
+    if (logos[i]) {
+      doc.addImage(logos[i]!, logoFiles[i].fmt, x, footerY, logoFiles[i].w, logoFiles[i].h);
+    }
+    x += logoFiles[i].w + gap;
+  }
+  // Thin line above logos
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.2);
+  doc.line(ML, footerY - 1.5, MR, footerY - 1.5);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function QuotationDownload(props: Props) {
-  const [pdfLoading,   setPdfLoading]   = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [excelLoading, setExcelLoading] = useState(false);
 
   return (
     <div className="flex items-center gap-2">
-      <button onClick={async () => { setPdfLoading(true); try { await downloadPDF(props); } finally { setPdfLoading(false); } }}
+      <button
+        onClick={async () => {
+          setPdfLoading(true);
+          try { await downloadPDF(props); }
+          catch (e) { console.error("PDF Error:", e); alert("PDF generation failed: " + (e instanceof Error ? e.message : String(e))); }
+          finally { setPdfLoading(false); }
+        }}
         disabled={pdfLoading}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-60 shadow"
-        title="Download PDF">
+        title="Download PDF"
+      >
         {pdfLoading
           ? <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
           : "📄"} PDF
       </button>
-      <button onClick={async () => { setExcelLoading(true); try { await downloadExcel(props); } finally { setExcelLoading(false); } }}
+      <button
+        onClick={async () => {
+          setExcelLoading(true);
+          try { await downloadExcel(props); }
+          finally { setExcelLoading(false); }
+        }}
         disabled={excelLoading}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-700 hover:bg-green-800 active:scale-95 transition-all disabled:opacity-60 shadow"
-        title="Download Excel">
+        title="Download Excel"
+      >
         {excelLoading
           ? <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
           : "📊"} Excel

@@ -1,0 +1,28 @@
+{
+  "appId": "com.prestairsystems.dashboard",
+  "productName": "Prestair Dashboard",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "electron/**/*",
+    "public/icons/**/*"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "public/icons/icon.ico"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": false,
+    "shortcutName": "Prestair Dashboard",
+    "installerIcon": "public/icons/icon.ico",
+    "uninstallerIcon": "public/icons/icon.ico"
+  }
+}

@@ -29,6 +29,13 @@ function fmt(n: number | null): string {
   return n.toLocaleString("en-IN");
 }
 
+function fmtDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  if (!y || !m || !d) return dateStr;
+  return `${d}/${m}/${y}`;
+}
+
 export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Props) {
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -36,20 +43,47 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
 
-  // Group rows by section
-  const sections = Array.from(new Set(q.rows.map((r) => r.section)));
+  const displayRows: Array<
+    | { kind: "section"; key: string; title: string }
+    | { kind: "item"; key: string; itemNumber: number; row: SavedQuotation["rows"][number] }
+  > = [];
+  let itemNumber = 0;
+  let lastLegacySection = "";
+  q.rows.forEach((row, index) => {
+    if (row.rowType === "section") {
+      displayRows.push({
+        kind: "section",
+        key: `section-${row.id}-${index}`,
+        title: row.desc || row.section || "Untitled Section",
+      });
+      lastLegacySection = "";
+      return;
+    }
+
+    const legacySection = row.section && row.section !== "Custom"
+      ? (SECTION_LABELS[row.section] ?? row.section)
+      : "";
+    if (legacySection && legacySection !== lastLegacySection) {
+      displayRows.push({ kind: "section", key: `legacy-section-${index}`, title: legacySection });
+      lastLegacySection = legacySection;
+    }
+    displayRows.push({ kind: "item", key: `item-${row.id}-${index}`, itemNumber: ++itemNumber, row });
+  });
 
   // Download props
-  const downloadRows = q.rows.map((r, i) => ({
-    slNo:     String(i + 1),
-    itemCode: r.id,
+  let downloadItemNumber = 0;
+  const downloadRows = q.rows.map((r) => ({
+    rowType:  r.rowType,
+    slNo:     r.rowType === "section" ? "" : String(++downloadItemNumber),
+    itemCode: r.rowType === "section" ? "" : r.id,
     desc:     r.desc,
     size:     r.size,
     hsn:      r.hsn,
-    qty:      String(r.qty),
-    discount: "0",
+    qty:      r.rowType === "section" ? "" : String(r.qty),
+    additionalColumn: r.additionalColumn,
     rate:     r.rate !== null ? String(r.rate) : "",
     amt:      r.amt,
+    section:  r.section,
   }));
 
   return (
@@ -65,19 +99,22 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
             <h2 className="text-white font-bold text-base">
               👁 Quotation #{q.serialNo} — {q.partyName}
             </h2>
-            <p className="text-blue-200 text-xs">{q.quotationNo} · {q.date}</p>
+            <p className="text-blue-200 text-xs">{q.quotationNo} · {fmtDate(q.date)}</p>
           </div>
           <div className="flex items-center gap-3">
             {/* Download */}
             <QuotationDownload
               quotation={q}
               partyName={q.partyName}
+              partyAddress={q.partyAddress}
+              partyGST={q.partyGST}
+              attention={q.attention}
               quotationNo={q.quotationNo}
               date={q.date}
               subject={q.subject}
               rows={downloadRows}
               gross={q.gross}
-              discount={q.discount}
+              discounts={q.discounts}
               afterDiscount={q.afterDiscount}
               gst={q.gst}
               grandTotal={q.grandTotal}
@@ -112,7 +149,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                   <InfoRow label="GST No." value={q.partyGST || "—"} />
                 </div>
                 <div className="p-4 space-y-2 text-sm">
-                  <InfoRow label="Date" value={q.date} />
+                  <InfoRow label="Date" value={fmtDate(q.date)} />
                   <InfoRow label="Quotation No." value={q.quotationNo || "—"} mono />
                   <InfoRow label="Kind Attention" value={q.attention || "—"} />
                 </div>
@@ -131,7 +168,8 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                       <tr className="bg-slate-700 text-white">
                         <th className="border border-slate-600 px-2 py-2 text-center w-10">SL</th>
                         <th className="border border-slate-600 px-2 py-2 text-left w-20">CODE</th>
-                        <th className="border border-slate-600 px-3 py-2 text-left">DESCRIPTION</th>
+                        <th className="border border-slate-600 px-3 py-2 text-left">ITEM NAME</th>
+                        <th className="min-w-48 border border-slate-600 px-3 py-2 text-left">ADDITIONAL DESCRIPTION</th>
                         <th className="border border-slate-600 px-2 py-2 text-center w-24">SIZE</th>
                         <th className="border border-slate-600 px-2 py-2 text-center w-16">HSN</th>
                         <th className="border border-slate-600 px-2 py-2 text-center w-12">QTY</th>
@@ -140,34 +178,39 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                       </tr>
                     </thead>
                     <tbody>
-                      {sections.map((section) => {
-                        const sRows = q.rows.filter((r) => r.section === section);
-                        if (!sRows.length) return null;
-                        return [
-                          <tr key={`sec-${section}`}>
-                            <td colSpan={8} className="border border-slate-100 px-3 py-1.5 bg-blue-50 text-blue-800 font-bold text-[10px] uppercase tracking-wider">
-                              {SECTION_LABELS[section] ?? section}
-                            </td>
-                          </tr>,
-                          ...sRows.map((r, idx) => (
-                            <tr key={r.id + idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                              <td className="border border-slate-100 px-2 py-1.5 text-center text-slate-500">{idx + 1}</td>
-                              <td className="border border-slate-100 px-2 py-1.5 font-mono font-bold text-slate-700">{r.id}</td>
-                              <td className="border border-slate-100 px-3 py-1.5 text-slate-700">{r.desc}</td>
-                              <td className="border border-slate-100 px-2 py-1.5 text-center text-slate-500 text-[10px]">{r.size}</td>
-                              <td className="border border-slate-100 px-2 py-1.5 text-center font-mono text-slate-600">{r.hsn}</td>
-                              <td className="border border-slate-100 px-2 py-1.5 text-center font-semibold text-slate-700">{r.qty}</td>
-                              <td className="border border-slate-100 px-2 py-1.5 text-right font-mono text-slate-700">
-                                {r.rate !== null ? fmt(r.rate) : <span className="text-slate-400">NQ</span>}
-                              </td>
-                              <td className="border border-slate-100 px-3 py-1.5 text-right font-mono font-bold">
-                                {r.amt !== null
-                                  ? <span className="text-green-700">{fmt(r.amt)}</span>
-                                  : <span className="text-slate-400 font-normal">NQ</span>}
+                      {displayRows.map((entry, index) => {
+                        if (entry.kind === "section") {
+                          return (
+                            <tr key={entry.key}>
+                              <td colSpan={9} className="border border-blue-200 bg-blue-50 px-3 py-2 text-center text-[11px] font-black uppercase tracking-wider text-blue-800">
+                                {entry.title}
                               </td>
                             </tr>
-                          )),
-                        ];
+                          );
+                        }
+
+                        const r = entry.row;
+                        return (
+                          <tr key={entry.key} className={index % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            <td className="border border-slate-100 px-2 py-1.5 text-center text-slate-500">{entry.itemNumber}</td>
+                            <td className="border border-slate-100 px-2 py-1.5 font-mono font-bold text-slate-700">{r.id}</td>
+                            <td className="border border-slate-100 px-3 py-1.5 text-slate-700">{r.desc}</td>
+                            <td className="min-w-48 border border-slate-100 px-3 py-1.5 text-left text-slate-600">
+                              {r.additionalColumn || "—"}
+                            </td>
+                            <td className="border border-slate-100 px-2 py-1.5 text-center text-slate-500 text-[10px]">{r.size}</td>
+                            <td className="border border-slate-100 px-2 py-1.5 text-center font-mono text-slate-600">{r.hsn}</td>
+                            <td className="border border-slate-100 px-2 py-1.5 text-center font-semibold text-slate-700">{r.qty}</td>
+                            <td className="border border-slate-100 px-2 py-1.5 text-right font-mono text-slate-700">
+                              {r.rate !== null ? fmt(r.rate) : <span className="text-slate-400">NQ</span>}
+                            </td>
+                            <td className="border border-slate-100 px-3 py-1.5 text-right font-mono font-bold">
+                              {r.amt !== null
+                                ? <span className="text-green-700">{fmt(r.amt)}</span>
+                                : <span className="text-slate-400 font-normal">NQ</span>}
+                            </td>
+                          </tr>
+                        );
                       })}
                     </tbody>
                   </table>
@@ -178,20 +221,51 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
 
               {/* Totals */}
               <div className="border-t-2 border-slate-300">
-                {([
-                  ["TOTAL (GROSS)",       q.gross,         "bg-yellow-50  text-yellow-900 font-bold"],
-                  ["LESS – DISCOUNT",     q.discount,      "bg-orange-50  text-orange-700"],
-                  ["TOTAL AFTER DISC.",   q.afterDiscount, "bg-orange-100 text-orange-900 font-bold"],
-                  ["GST @ 18%",           q.gst,           "bg-red-50     text-red-700"],
-                  ["GRAND TOTAL",         q.grandTotal,    "bg-green-600  text-white font-bold text-sm"],
-                ] as [string, number, string][]).map(([label, val, cls]) => (
-                  <div key={label} className={`flex justify-between items-center px-6 py-2 border-b border-slate-200 ${cls}`}>
-                    <span className="tracking-wide text-xs font-semibold">{label}</span>
-                    <span className="font-mono font-bold">₹ {fmt(val)}</span>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-yellow-50 px-6 py-2 font-bold text-yellow-900">
+                  <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.gross)}</span>
+                </div>
+                {q.discounts.seasonal.enabled && (
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-700">
+                    <span className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</span>
+                    <span className="font-mono font-bold">₹ {fmt(q.discounts.seasonal.amount)}</span>
                   </div>
-                ))}
-                <div className="px-6 py-2 text-[10px] text-slate-400 italic bg-slate-50">
-                  TRANSPORTATION CHARGES AS ACTUAL
+                )}
+                {q.discounts.special.enabled && (
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-700">
+                    <span className="text-xs font-semibold tracking-wide">SPECIAL DISCOUNT</span>
+                    <span className="font-mono font-bold">₹ {fmt(q.discounts.special.amount)}</span>
+                  </div>
+                )}
+                {q.discounts.legacyAmount > 0 && (
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-700">
+                    <span className="text-xs font-semibold tracking-wide">DISCOUNT</span>
+                    <span className="font-mono font-bold">₹ {fmt(q.discounts.legacyAmount)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
+                  <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.afterDiscount)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
+                  <span className="text-xs font-semibold tracking-wide">TRANSPORTATION CHARGES</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.discounts.transportationAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
+                  <span className="text-xs font-semibold tracking-wide">PACKING CHARGES</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.discounts.packingAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-100 px-6 py-2 font-bold text-cyan-950">
+                  <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE BEFORE GST</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.afterDiscount + q.discounts.transportationAmount + q.discounts.packingAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
+                  <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.gst)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
+                  <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
+                  <span className="font-mono font-bold">₹ {fmt(q.grandTotal)}</span>
                 </div>
               </div>
             </div>
@@ -201,7 +275,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
         {/* Bottom bar */}
         <div className="flex-shrink-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center">
           <p className="text-xs text-slate-500">
-            <strong>{q.rows.length}</strong> items &nbsp;·&nbsp; Grand Total:{" "}
+            <strong>{itemNumber}</strong> items &nbsp;·&nbsp; Grand Total:{" "}
             <strong className="text-green-700 text-sm">₹ {fmt(q.grandTotal)}</strong>
           </p>
           <div className="flex gap-3">

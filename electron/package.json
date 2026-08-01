@@ -1,0 +1,7 @@
+{
+  "name": "prestair-dashboard",
+  "version": "1.0.0",
+  "description": "Prestair Systems LLP - Quotation Dashboard",
+  "main": "main.js",
+  "author": "Prestair Systems LLP"
+}

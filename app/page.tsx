@@ -1,11 +1,11 @@
 import { QUOTATION_META } from "@/lib/data";
 import KpiCards from "@/components/KpiCards";
-import ItemTable from "@/components/ItemTable";
 import ChartsSection from "@/components/ChartsSection";
 import HeaderActions from "@/components/HeaderActions";
 import UserBar from "@/components/UserBar";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import DashboardToolbar from "@/components/DashboardToolbar";
+import PrestairLogo, { PRESTAIR_ADDRESS } from "@/components/PrestairLogo";
 
 const TERMS = [
   { icon: "✅", label: "Rate validity", value: "10 days" },
@@ -26,42 +26,41 @@ export default function DashboardPage() {
       <header className="bg-gradient-to-r from-slate-900 to-blue-700 text-white shadow-lg">
         <div className="max-w-screen-2xl mx-auto px-6">
 
-          {/* Row 1: Company logo (top-left) + Center title + User (top-right) */}
-          <div className="flex items-center justify-between py-4 border-b border-white/10">
+          {/* Row 1: Company logo + report title + company/user details */}
+          <div className="grid grid-cols-1 items-center gap-3 border-b border-white/10 py-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
 
-            {/* Left: Prestair Logo + text below + Certification logos */}
-            <div className="flex-1 flex items-center gap-4">
-              {/* Prestair Logo with text below */}
-              <div className="flex flex-col items-start">
-                <img src="/logos/prestair-logo.svg" alt="Prestair Systems LLP" className="h-10 w-auto" />
-                <span className="text-[8px] text-blue-200 uppercase tracking-widest mt-1">
-                  Commercial Food Service Equipments
-                </span>
-                <span className="text-[8px] text-blue-300">Since 1982</span>
+            {/* Left: exact shared Prestair logo + certification badges */}
+            <div className="flex min-w-0 flex-wrap items-center justify-center gap-3 lg:justify-start">
+              <div className="relative">
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-x-5 -inset-y-2 rounded-full bg-[radial-gradient(ellipse_at_left,rgba(147,197,253,0.3),rgba(59,130,246,0.1)_52%,transparent_74%)] blur-md"
+                />
+                <PrestairLogo className="relative h-11 sm:h-12 xl:h-14" />
               </div>
 
-              {/* Certification Badges — side */}
-              <div className="flex items-center gap-1.5 ml-2">
+              {/* Certification badges stay visible when the header has enough room. */}
+              <div className="hidden items-center gap-1.5 xl:flex">
                 <img src="/logos/gacb.svg" alt="GACB" className="h-6 w-6 rounded-full bg-white p-0.5" title="GACB" />
-                <img src="/logos/ce.svg" alt="CE" className="h-5 w-8 bg-white rounded px-1" title="CE Mark" />
+                <img src="/logos/ce.svg" alt="CE" className="h-5 w-8 rounded bg-white px-1" title="CE Mark" />
                 <img src="/logos/iaf.svg" alt="IAF" className="h-6 w-9 rounded" title="IAF" />
                 <img src="/logos/qcs.svg" alt="QCS" className="h-6 w-9 rounded bg-white p-0.5" title="QCS" />
-                <img src="/logos/iso.svg" alt="ISO" className="h-6 w-6 bg-white rounded p-0.5" title="ISO 9001:2015" />
+                <img src="/logos/iso.svg" alt="ISO" className="h-6 w-6 rounded bg-white p-0.5" title="ISO 9001:2015" />
                 <img src="/logos/uaf.svg" alt="UAF" className="h-5 w-10 rounded bg-white" title="UAF" />
               </div>
             </div>
 
             {/* Center: Main title */}
-            <h1 className="text-lg font-bold tracking-wide text-center whitespace-nowrap">
+            <h1 className="order-first whitespace-nowrap text-center text-base font-bold tracking-wide sm:text-lg lg:order-none">
               Quotation Dashboard Report
             </h1>
 
-            {/* Right: GST + User & Logout + Hamburger */}
-            <div className="flex-1 flex flex-col items-end gap-2">
-              <div className="flex items-center gap-3">
-                <div className="text-right">
+            {/* Right: full address, GST, user controls and menu */}
+            <div className="flex min-w-0 flex-col items-center gap-2 lg:items-end">
+              <div className="flex items-start gap-3">
+                <div className="max-w-sm text-center lg:text-right">
                   <p className="text-xs text-blue-200">GST: {QUOTATION_META.vendorGST}</p>
-                  <p className="text-[10px] text-blue-300">B-127 Phase-2, Noida, UP 201305</p>
+                  <p className="text-[10px] leading-relaxed text-blue-300">{PRESTAIR_ADDRESS}</p>
                 </div>
                 <HamburgerMenu />
               </div>
@@ -86,11 +85,6 @@ export default function DashboardPage() {
         {/* ── CHARTS ── */}
         <div className="animate-slide-up" style={{animationDelay:"0.1s"}}>
           <ChartsSection />
-        </div>
-
-        {/* ── ITEM TABLE ── */}
-        <div className="animate-slide-up" style={{animationDelay:"0.2s"}}>
-          <ItemTable />
         </div>
 
         {/* ── TERMS ── */}

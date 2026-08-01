@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuotations } from "@/context/QuotationContext";
-import { ALL_ITEMS, fmtINR } from "@/lib/data";
+import { fmtINR } from "@/lib/data";
 
 type KpiProps = {
   label: string;
@@ -44,37 +44,28 @@ function KpiCard({ label, value, sub, accent, textLight }: KpiProps) {
 }
 
 export default function KpiCards() {
-  const { quotations, loading } = useQuotations();
+  const { quotations, filteredQuotations, hasActiveFilters, loading } = useQuotations();
 
-  // ── Aggregate across ALL saved quotations ───────────────────────────────────
+  // ── Aggregate across the search/date-filtered quotations ────────────────────
   const stats = useMemo(() => {
-    if (quotations.length === 0) {
-      // fallback: show static data from original excel when no quotations saved yet
-      const pricedItems = ALL_ITEMS.filter((i) => i.amt !== null).length;
-      const nqItems     = ALL_ITEMS.filter((i) => i.amt === null).length;
-      const gross       = 3001000;
-      const discount    = 261000;
+    if (quotations.length === 0 && !hasActiveFilters) {
+      // Preserve the original spreadsheet totals until the first quotation is saved.
+      const gross = 3001000;
+      const discount = 261000;
       const afterDiscount = gross - discount;
-      const gst         = Math.round(afterDiscount * 0.18);
-      const grandTotal  = afterDiscount + gst;
-      return { totalItems: ALL_ITEMS.length, pricedItems, nqItems, gross, discount, afterDiscount, gst, grandTotal };
+      const gst = Math.round(afterDiscount * 0.18);
+      const grandTotal = afterDiscount + gst;
+      return { gross, discount, afterDiscount, gst, grandTotal };
     }
 
-    // sum across all saved quotations
-    const gross       = quotations.reduce((s, q) => s + q.gross, 0);
-    const discount    = quotations.reduce((s, q) => s + q.discount, 0);
-    const afterDiscount = quotations.reduce((s, q) => s + q.afterDiscount, 0);
-    const gst         = quotations.reduce((s, q) => s + q.gst, 0);
-    const grandTotal  = quotations.reduce((s, q) => s + q.grandTotal, 0);
+    const gross = filteredQuotations.reduce((sum, quotation) => sum + quotation.gross, 0);
+    const discount = filteredQuotations.reduce((sum, quotation) => sum + quotation.discount, 0);
+    const afterDiscount = filteredQuotations.reduce((sum, quotation) => sum + quotation.afterDiscount, 0);
+    const gst = filteredQuotations.reduce((sum, quotation) => sum + quotation.gst, 0);
+    const grandTotal = filteredQuotations.reduce((sum, quotation) => sum + quotation.grandTotal, 0);
 
-    // total items across all quotation rows
-    const allRows   = quotations.flatMap((q) => q.rows);
-    const totalItems  = allRows.length;
-    const pricedItems = allRows.filter((r) => r.amt !== null && r.amt > 0).length;
-    const nqItems     = allRows.filter((r) => r.amt === null).length;
-
-    return { totalItems, pricedItems, nqItems, gross, discount, afterDiscount, gst, grandTotal };
-  }, [quotations]);
+    return { gross, discount, afterDiscount, gst, grandTotal };
+  }, [quotations, filteredQuotations, hasActiveFilters]);
 
   const discPct = stats.gross > 0
     ? ((stats.discount / stats.gross) * 100).toFixed(2)
@@ -96,9 +87,9 @@ export default function KpiCards() {
 
   const cards: KpiProps[] = [
     {
-      label: "Total Items",
-      value: String(stats.totalItems),
-      sub:   `${stats.pricedItems} priced · ${stats.nqItems} NQ`,
+      label: "Total Quotations",
+      value: String(filteredQuotations.length),
+      sub: hasActiveFilters ? "Matching current search & filters" : "All saved quotations",
       accent: "#2563eb",
     },
     {
