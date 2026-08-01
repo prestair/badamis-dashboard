@@ -222,7 +222,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     try {
       const res  = await fetch("/api/quotations");
       const data = await res.json();
-      if (Array.isArray(data)) setQuotations(data.map(mapRow));
+      if (Array.isArray(data)) setQuotations(data.map(mapRow).sort((a, b) => b.serialNo - a.serialNo));
     } catch (e) {
       console.error("Failed to fetch quotations", e);
     } finally {
@@ -251,7 +251,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Save failed");
     const saved = mapRow(data);
-    setQuotations((prev) => [...prev, saved]);
+    setQuotations((prev) => [saved, ...prev]);
     return saved.serialNo;
   }
 
