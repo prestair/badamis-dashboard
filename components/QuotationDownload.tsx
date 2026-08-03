@@ -325,20 +325,25 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Prestair Systems LLP logo — top-left without border
-  if (prestairLogo) {
-    try {
-      doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
-    } catch {
-      // Fallback to text if image fails
-      doc.setFont("helvetica", "bolditalic");
-      doc.setFontSize(17);
-      doc.setTextColor(37, 99, 235);
-      doc.text("Prestair", ML + 3, 12);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
-    }
-  } else {
+  // Convert base64 PNG to JPEG via canvas to remove alpha channel (jsPDF issue)
+  try {
+    const logoImg = await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
+      };
+      img.onerror = () => reject(new Error("Logo load failed"));
+      img.src = prestairLogo;
+    });
+    doc.addImage(logoImg, "JPEG", ML, 4, 55, 18);
+  } catch {
     doc.setFont("helvetica", "bolditalic");
     doc.setFontSize(17);
     doc.setTextColor(37, 99, 235);
