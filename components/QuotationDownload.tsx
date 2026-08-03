@@ -325,10 +325,9 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Prestair Systems LLP logo — top-left without border
-  // Use raw base64 directly with jsPDF (most reliable method)
+  // Use full data URI directly with jsPDF
   try {
-    const raw = prestairLogo.replace(/^data:image\/\w+;base64,/, "");
-    doc.addImage(raw, "PNG", ML, 4, 55, 18, undefined, "FAST");
+    doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
   } catch (e) {
     console.error("Logo addImage failed:", e);
     doc.setFont("helvetica", "bolditalic");
