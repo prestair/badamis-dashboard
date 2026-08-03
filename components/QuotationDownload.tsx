@@ -326,7 +326,7 @@ async function buildQuotationPDF(props: Props) {
   // PAGE 1 HEADER — matching original exactly
   // ══════════════════════════════════════════════════════════════════════════
 
-  // Prestair Systems LLP logo — rendered at full quality without background
+  // Prestair Systems LLP logo — top-left without border
   if (prestairLogo) {
     doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
   } else {
