@@ -315,8 +315,8 @@ async function buildQuotationPDF(props: Props) {
     { file: "gacb.png", fmt: "PNG", w: 9, h: 9 },
     { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
   ];
-  // Load Prestair logo from embedded base64 (guaranteed to work)
-  const prestairLogo = PRESTAIR_LOGO_BASE64;
+  // Load Prestair logo - pre-converted JPEG with white background
+  const prestairLogoJpeg = PRESTAIR_LOGO_BASE64;
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
 
@@ -325,7 +325,17 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Prestair Systems LLP logo — top-left without border
-  doc.addImage(prestairLogo, "JPEG", ML, 4, 55, 18);
+  if (prestairLogoJpeg) {
+    doc.addImage(prestairLogoJpeg, "JPEG", ML, 4, 55, 18);
+  } else {
+    doc.setFont("helvetica", "bolditalic");
+    doc.setFontSize(17);
+    doc.setTextColor(37, 99, 235);
+    doc.text("Prestair", ML + 3, 12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
+  }
 
   // Company details under the logo.
   doc.setFont("helvetica", "bold");

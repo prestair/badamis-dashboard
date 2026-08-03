@@ -1,29 +1,21 @@
-// Prestair Dashboard Service Worker — network-first with offline fallback
-const CACHE_NAME = "prestair-v1";
-const OFFLINE_URL = "/";
+// Prestair Dashboard Service Worker — network-first, no aggressive caching
+const CACHE_NAME = "prestair-v2";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.add(OFFLINE_URL))
-  );
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  // Delete all old caches
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode !== "navigate") return;
-
-  event.respondWith(
-    fetch(event.request).catch(() =>
-      caches.match(OFFLINE_URL).then((cached) => cached || new Response("Offline", { status: 503 }))
-    )
-  );
+  // Always go to network, never serve from cache
+  return;
 });
