@@ -288,14 +288,11 @@ async function buildQuotationPDF(props: Props) {
   const PAGE_TOP = 12;
 
   // ── Helper: load raster image as a data URL ───────────────────────────────
-  // PDF generation intentionally uses PNG/JPEG only. Passing SVG data to
-  // jsPDF.addImage throws at runtime in browsers without the SVG plugin.
   async function loadImg(file: string): Promise<string | null> {
     try {
       const res = await fetch(`/logos/${file}`);
       if (!res.ok) return null;
       const blob = await res.blob();
-      if (!/^image\/(png|jpe?g|webp)$/i.test(blob.type)) return null;
 
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -328,7 +325,18 @@ async function buildQuotationPDF(props: Props) {
 
   // Prestair Systems LLP logo — top-left without border
   if (prestairLogo) {
-    doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
+    try {
+      doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
+    } catch {
+      // Fallback to text if image fails
+      doc.setFont("helvetica", "bolditalic");
+      doc.setFontSize(17);
+      doc.setTextColor(37, 99, 235);
+      doc.text("Prestair", ML + 3, 12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
+    }
   } else {
     doc.setFont("helvetica", "bolditalic");
     doc.setFontSize(17);
