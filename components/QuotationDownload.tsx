@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { SavedQuotation } from "@/context/QuotationContext";
 import { QuotationDiscounts } from "@/lib/quotationAudit";
-import { PRESTAIR_LOGO_BASE64 } from "@/lib/prestairLogoData";
 
 type Props = {
   quotation?:    SavedQuotation;
@@ -315,38 +314,50 @@ async function buildQuotationPDF(props: Props) {
     { file: "gacb.png", fmt: "PNG", w: 9, h: 9 },
     { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
   ];
-  // Load Prestair logo - pre-converted JPEG with white background
-  const prestairLogoJpeg = PRESTAIR_LOGO_BASE64;
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 1 HEADER — matching original exactly
+  // PAGE 1 HEADER — Inverted logo: white bg, dark blue text, grey PS area
   // ══════════════════════════════════════════════════════════════════════════
 
-  // Prestair Systems LLP logo — top-left without border
-  if (prestairLogoJpeg) {
-    doc.addImage(prestairLogoJpeg, "JPEG", ML, 4, 55, 18);
-  } else {
-    doc.setFont("helvetica", "bolditalic");
-    doc.setFontSize(17);
-    doc.setTextColor(37, 99, 235);
-    doc.text("Prestair", ML + 3, 12);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
-  }
+  // Draw logo directly with jsPDF (no external image needed)
+  // Grey PS circle (was red in original)
+  doc.setFillColor(200, 200, 200);
+  doc.circle(ML + 46, 10, 4.5, "F");
+  doc.setFont("helvetica", "bolditalic");
+  doc.setFontSize(6.5);
+  doc.setTextColor(26, 58, 107);
+  doc.text("PS", ML + 46, 11, { align: "center" });
 
-  // Company details under the logo.
+  // "Prestair" — bold italic dark blue
+  doc.setFont("helvetica", "bolditalic");
+  doc.setFontSize(18);
+  doc.setTextColor(26, 58, 107);
+  doc.text("Prestair", ML + 1, 13);
+
+  // "Systems LLP"
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(26, 58, 107);
+  doc.text("Systems LLP", ML + 1, 19);
+
+  // "SINCE 1982"
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(26, 58, 107);
+  doc.text("SINCE 1982", ML + 1, 23.5);
+
+  // Company details — dark blue
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235);
-  doc.text("Commercial Food Service Equipments", ML, 25.5);
+  doc.setTextColor(26, 58, 107);
+  doc.text("Commercial Food Service Equipments", ML, 28);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(60, 60, 60);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 29);
-  doc.text("India", ML, 32);
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 31.5);
+  doc.text("India", ML, 34.5);
 
   // Certification logos top-right, without an enclosing border.
   const logoBoxX = 130;
