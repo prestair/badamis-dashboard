@@ -93,185 +93,139 @@ async function downloadExcel(props: Props) {
   const wb = XLSX.utils.book_new();
 
   const hasDiscount = props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0;
+  const safeNum = (n: number) => (isNaN(n) || n === null || n === undefined) ? 0 : n;
 
   // Style definitions
-  const boldStyle = { font: { bold: true } };
-  const headerStyle = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "1F4E79" } }, font2: { color: { rgb: "FFFFFF" } } };
-  const sectionStyle = { font: { bold: true, sz: 10 }, fill: { fgColor: { rgb: "C6EFCE" } }, alignment: { horizontal: "center" } };
-  const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FFFFCC" } } };
-  const companyStyle = { font: { bold: true, sz: 14 } };
+  const boldWrap = { font: { bold: true }, alignment: { wrapText: true } };
+  const cBorder = { alignment: { wrapText: true, vertical: "top", horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  const lBorder = { alignment: { wrapText: true, vertical: "top" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
 
-  // ── Build rows ──────────────────────────────────────────────────────────────
   type CellVal = string | number | { v: string | number; s: object };
   const data: CellVal[][] = [];
   const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
   let r = 0;
-
-  // Helper to create styled cell
   const sc = (v: string | number, s: object): { v: string | number; s: object } => ({ v, s });
 
-  // Company header
-  data.push([sc("", {}), sc("PRESTAIR SYSTEMS LLP", { font: { bold: true, sz: 16 } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  data.push(["", sc("Commercial Food Service Equipments | Since 1982", { font: { sz: 10, italic: true } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  data.push(["", "B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX", "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  // Rows 0-1: reserved for logo image
+  data.push(["", "", "", "", "", "", "", "", ""]); r++;
+  data.push(["", "", "", "", "", "", "", "", ""]); r++;
+  // Row 2 (index 2): Commercial Food Service Equipments
+  data.push([sc("Commercial Food Service Equipments", { font: { bold: true, sz: 8, color: { rgb: "1A3A6B" } } }), "", "", "", "", "", "", "", ""]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
+  // Row 3 (index 3): Address
+  data.push([sc("B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX", { font: { sz: 8 } }), "", "", "", "", "", "", "", ""]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
-  // Date & Quotation No - BOLD
-  data.push([sc(`Date: ${fmtDateDisplay(props.date)}`, boldStyle), "", "", "", "", "", "", sc(`Quotation No: ${props.quotationNo}`, boldStyle), ""]);
-  r++;
+  // Date & Quotation No — merged cells so full text shows
+  data.push([sc(`Date: ${fmtDateDisplay(props.date)}`, { font: { bold: true, sz: 10 } }), "", "", "", "", sc(`Quotation No: ${props.quotationNo}`, { font: { bold: true, sz: 10 }, alignment: { horizontal: "right" } }), "", "", ""]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: 2 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
-  // Party details - BOLD
-  data.push(["", sc(`M/S: ${props.partyName}`, { font: { bold: true, sz: 11 } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  if (props.partyAddress) {
-    data.push(["", sc(props.partyAddress, boldStyle), "", "", "", "", "", "", ""]);
-    merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  }
-  if (props.partyGST) {
-    data.push(["", sc(`GST: ${props.partyGST}`, boldStyle), "", "", "", "", "", "", ""]);
-    merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  }
+  // Party details
+  data.push([sc(`M/S: ${props.partyName}`, { font: { bold: true, sz: 11 } }), "", "", "", "", "", "", "", ""]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
+  if (props.partyAddress) { data.push([sc(props.partyAddress, boldWrap), "", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++; }
+  if (props.partyGST) { data.push([sc(`GST: ${props.partyGST}`, boldWrap), "", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++; }
   data.push([]); r++;
-  if (props.attention) {
-    data.push(["", sc(`Kind Attention: ${props.attention}`, boldStyle), "", "", "", "", "", "", ""]);
-    merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  }
-  data.push(["", sc(`SUBJECT: ${props.subject}`, boldStyle), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  if (props.attention) { data.push([sc(`Kind Attention: ${props.attention}`, boldWrap), "", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++; }
+  data.push([sc(`SUBJECT: ${props.subject}`, { font: { bold: true, sz: 10 }, alignment: { wrapText: true } }), "", "", "", "", "", "", "", ""]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
-  // Table header - BOLD with blue background
-  const tableHeaderStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-  data.push([
-    sc("SL NO", tableHeaderStyle),
-    sc("ITEM CODE", tableHeaderStyle),
-    sc("ITEM NAME", tableHeaderStyle),
-    sc("ADDITIONAL DESCRIPTION", tableHeaderStyle),
-    sc("SIZE", tableHeaderStyle),
-    sc("HSN CODE", tableHeaderStyle),
-    sc("QTY", tableHeaderStyle),
-    sc("RATE", tableHeaderStyle),
-    sc("AMOUNT", tableHeaderStyle),
-  ]);
-  r++;
+  // Table header
+  const th = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  data.push([sc("SL NO", th), sc("ITEM CODE", th), sc("ITEM NAME", th), sc("ADDITIONAL DESCRIPTION", th), sc("SIZE", th), sc("HSN CODE", th), sc("QTY", th), sc("RATE", th), sc("AMOUNT", th)]); r++;
 
   // Item rows
-  const borderStyle = { border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   for (const row of props.rows) {
     if (row.rowType === "section") {
-      // Section header - GREEN background
-      const heading = (row.desc || row.section || "").toUpperCase();
-      const secStyle = { font: { bold: true }, fill: { fgColor: { rgb: "C6EFCE" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-      data.push([sc(heading, secStyle), "", "", "", "", "", "", "", ""]);
-      merges.push({ s: { r, c: 0 }, e: { r, c: 8 } });
-      r++;
+      const ss = { font: { bold: true }, fill: { fgColor: { rgb: "C6EFCE" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+      data.push([sc((row.desc || row.section || "").toUpperCase(), ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss)]);
+      merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
     } else {
-      data.push([
-        sc(row.slNo, borderStyle),
-        sc(row.itemCode, borderStyle),
-        sc(row.desc, borderStyle),
-        sc(row.additionalColumn, borderStyle),
-        sc(row.size, borderStyle),
-        sc(row.hsn, borderStyle),
-        sc(row.qty || "1", borderStyle),
-        sc(row.rate || "NQ", borderStyle),
-        sc(row.amt !== null ? row.amt : "NQ", borderStyle),
-      ]);
-      r++;
+      data.push([sc(row.slNo || "", cBorder), sc(row.itemCode || "", cBorder), sc(row.desc || "", lBorder), sc(row.additionalColumn || "", lBorder), sc(row.size || "", cBorder), sc(row.hsn || "", cBorder), sc(row.qty || "1", cBorder), sc(row.rate || "NQ", cBorder), sc(row.amt !== null ? row.amt : "NQ", cBorder)]); r++;
     }
   }
 
-  // Totals - YELLOW background
-  const totStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FFFFCC" } }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-  data.push(["", "", "", "", "", "", "", sc("TOTAL", totStyle), sc(props.gross, totStyle)]); r++;
-  if (props.discounts.seasonal.enabled) {
-    data.push(["", "", "", "", "", "", "", sc("LESS- SEASONAL DISCOUNT", totStyle), sc(props.discounts.seasonal.amount, totStyle)]); r++;
-  }
-  if (props.discounts.special.enabled) {
-    data.push(["", "", "", "", "", "", "", sc("LESS- SPECIAL DISCOUNT", totStyle), sc(props.discounts.special.amount, totStyle)]); r++;
-  }
-  if (props.discounts.legacyAmount > 0) {
-    data.push(["", "", "", "", "", "", "", sc("LESS- DISCOUNT", totStyle), sc(props.discounts.legacyAmount, totStyle)]); r++;
-  }
-  if (hasDiscount) {
-    data.push(["", "", "", "", "", "", "", sc("TOTAL AFTER DISCOUNT", totStyle), sc(props.afterDiscount, totStyle)]); r++;
-  }
-  data.push(["", "", "", "", "", "", "", sc("GST 18%", totStyle), sc(props.gst, totStyle)]); r++;
-  const grandStyle = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "FFD700" } }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-  data.push(["", "", "", "", "", "", "", sc("GRAND TOTAL", grandStyle), sc(props.grandTotal, grandStyle)]); r++;
-  data.push(["", "", "", "", "", "", "", "TRANSPORTATION CHARGES AS ACTUAL", ""]); r++;
+  // Totals — label merged from HSN col (5) to RATE col (7), amount in col 8
+  const ts = { font: { bold: true }, fill: { fgColor: { rgb: "FFFFCC" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  const pushT = (label: string, amount: number, style: object) => { data.push(["", "", "", "", "", sc(label, style), sc("", style), sc("", style), sc(amount, style)]); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++; };
+  pushT("TOTAL AMOUNT", safeNum(props.gross), ts);
+  if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", safeNum(props.discounts.seasonal.amount), ts);
+  if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", safeNum(props.discounts.special.amount), ts);
+  if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
+  if (hasDiscount) pushT("TOTAL AFTER DISCOUNT", safeNum(props.afterDiscount), ts);
+  pushT("TRANSPORTATION CHARGES", safeNum(props.discounts.transportationAmount), ts);
+  pushT("PACKING CHARGES", safeNum(props.discounts.packingAmount), ts);
+  pushT("TAXABLE VALUE BEFORE GST", safeNum(props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount), ts);
+  pushT("GST 18%", safeNum(props.gst), ts);
+  const gs = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "FFD700" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  pushT("GRAND TOTAL", safeNum(props.grandTotal), gs);
   data.push([]); r++;
 
   // Terms & Conditions
-  data.push(["", sc("Terms & Conditions:", { font: { bold: true, sz: 10, underline: true } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  for (const term of TERMS) {
-    data.push(["", term, "", "", "", "", "", "", ""]);
-    merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  }
+  data.push(["", sc("Terms & Conditions:", { font: { bold: true, sz: 10, underline: true }, alignment: { wrapText: true } }), "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  for (const term of TERMS) { data.push(["", sc(term, { font: { sz: 9 }, alignment: { wrapText: true } }), "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++; }
   data.push([]); r++;
 
   // Bank Details
-  data.push(["", sc("BANK DETAILS", { font: { bold: true, sz: 10, underline: true } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
-  const bankLines = [
-    "ACCOUNT NAME- PRESTAIR SYSTEMS LLP",
-    "ACCOUNT NO - 4513086230",
-    "ACCOUNT TYPE- CURRENT ACCOUNT",
-    "IFSC CODE-KKBK0000154",
-    "BANK - KOTAK MAHINDRA BANK",
-    "BRANCH - SECTOR 51 NOIDA",
-    "",
-    "GST NO-09AATFP8342B1ZX",
-  ];
-  for (const line of bankLines) {
-    data.push(["", sc(line, boldStyle), "", "", "", "", "", "", ""]);
-    merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  data.push(["", sc("BANK DETAILS", { font: { bold: true, sz: 10, underline: true } }), "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  for (const line of ["ACCOUNT NAME- PRESTAIR SYSTEMS LLP","ACCOUNT NO - 4513086230","ACCOUNT TYPE- CURRENT ACCOUNT","IFSC CODE-KKBK0000154","BANK - KOTAK MAHINDRA BANK","BRANCH - SECTOR 51 NOIDA","","GST NO-09AATFP8342B1ZX"]) {
+    data.push(["", sc(line, boldWrap), "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   }
-  data.push([]); r++;
-  data.push([]); r++;
-  data.push(["", sc("For Prestair Systems LLP", { font: { bold: true, sz: 11 } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  data.push([]); r++; data.push([]); r++;
+  data.push(["", sc("For Prestair Systems LLP", { font: { bold: true, sz: 11 } }), "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
 
   // ── Create worksheet ────────────────────────────────────────────────────────
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws["!merges"] = merges;
-
   ws["!cols"] = [
-    { wch: 6 },   // SL NO
-    { wch: 12 },  // ITEM CODE
-    { wch: 32 },  // ITEM NAME
-    { wch: 34 },  // ADDITIONAL DESCRIPTION
-    { wch: 16 },  // SIZE
-    { wch: 10 },  // HSN CODE
+    { wch: 5 },   // SL NO
+    { wch: 10 },  // ITEM CODE
+    { wch: 22 },  // ITEM NAME
+    { wch: 50 },  // ADDITIONAL DESCRIPTION (widest)
+    { wch: 12 },  // SIZE
+    { wch: 8 },   // HSN CODE
     { wch: 5 },   // QTY
-    { wch: 12 },  // RATE
-    { wch: 14 },  // AMOUNT
+    { wch: 10 },  // RATE
+    { wch: 12 },  // AMOUNT
   ];
-
-  ws["!pageSetup"] = {
-    paperSize: 9,
-    orientation: "portrait",
-    fitToWidth: 1,
-    fitToHeight: 0,
-    scale: 75,
-  };
-
-  ws["!margins"] = {
-    left: 0.3,
-    right: 0.3,
-    top: 0.7,
-    bottom: 0.7,
-    header: 0.3,
-    footer: 0.3,
-  };
+  ws["!rows"] = [{ hpt: 20 }, { hpt: 20 }, { hpt: 20 }]; // 3 rows for logo
 
   XLSX.utils.book_append_sheet(wb, ws, "Quotation");
-  XLSX.writeFile(wb, `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g, "-")}_${props.date}.xlsx`);
+
+  // Save with logo image injected into the xlsx zip
+  const fileName = `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g, "-")}_${props.date}.xlsx`;
+  try {
+    const logoRes = await fetch("/logos/prestair-inverted.png");
+    if (!logoRes.ok) throw new Error("no logo");
+    const logoBytes = new Uint8Array(await logoRes.arrayBuffer());
+    const wbOut: ArrayBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(wbOut);
+    zip.file("xl/media/image1.png", logoBytes);
+    const emu = (px: number) => Math.round(px * 9525);
+    zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(180)}" cy="${emu(50)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(180)}" cy="${emu(50)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>`);
+    zip.file("xl/drawings/_rels/drawing1.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>`);
+    let wsRels = "";
+    try { wsRels = await (zip.file("xl/worksheets/_rels/sheet1.xml.rels")?.async("string") ?? ""); } catch { /* */ }
+    if (!wsRels || !wsRels.includes("Relationships")) wsRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`;
+    else wsRels = wsRels.replace("</Relationships>", `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`);
+    zip.file("xl/worksheets/_rels/sheet1.xml.rels", wsRels);
+    let sheetXml = await (zip.file("xl/worksheets/sheet1.xml")?.async("string") ?? "");
+    if (sheetXml && !sheetXml.includes("<drawing")) { sheetXml = sheetXml.replace("</worksheet>", `<drawing r:id="rId1"/></worksheet>`); zip.file("xl/worksheets/sheet1.xml", sheetXml); }
+    let ct = await (zip.file("[Content_Types].xml")?.async("string") ?? "");
+    if (ct && !ct.includes('Extension="png"')) ct = ct.replace("</Types>", `<Default Extension="png" ContentType="image/png"/></Types>`);
+    if (ct && !ct.includes("drawing1.xml")) ct = ct.replace("</Types>", `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+    if (ct) zip.file("[Content_Types].xml", ct);
+    const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  } catch (e) {
+    console.warn("Image injection failed:", e);
+    XLSX.writeFile(wb, fileName);
+  }
 }
 
 // ── PDF (Matching original Prestair quotation format) ─────────────────────────
