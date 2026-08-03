@@ -90,58 +90,170 @@ const TERMS = [
 // ── EXCEL ─────────────────────────────────────────────────────────────────────
 async function downloadExcel(props: Props) {
   const XLSX = await import("xlsx");
-  const wb   = XLSX.utils.book_new();
-  const data: unknown[][] = [
-    ["PRESTAIR SYSTEMS LLP"],
-    ["B-127 Phase-2, Noida, Uttar Pradesh 201305  |  GST: 09AATFP8342B1ZX  |  Since 1982"],
-    [],
-    ["M/S:", props.partyName],
-    ["Date:", fmtDateDisplay(props.date)],
-    ["Quotation No.:", props.quotationNo],
-    ["Subject:", props.subject],
-    [],
-    ["SL NO","ITEM CODE","ITEM NAME","ADDITIONAL DESCRIPTION","SIZE","HSN CODE","QTY","RATE","AMOUNT"],
-    ...props.rows.map((r) => r.rowType === "section"
-      ? [r.desc || r.section || "Untitled Section", "", "", "", "", "", "", "", ""]
-      : [r.slNo, r.itemCode, r.desc, r.additionalColumn, r.size, r.hsn, r.qty, r.rate, r.amt ?? "NQ"]),
-    [],
-    ["","","","","","","","TOTAL AMOUNT", props.gross],
-    ...(props.discounts.seasonal.enabled
-      ? [["","","","","","","","SEASONAL DISCOUNT", props.discounts.seasonal.amount]]
-      : []),
-    ...(props.discounts.special.enabled
-      ? [["","","","","","","","SPECIAL DISCOUNT", props.discounts.special.amount]]
-      : []),
-    ...(props.discounts.legacyAmount > 0
-      ? [["","","","","","","","DISCOUNT", props.discounts.legacyAmount]]
-      : []),
-    ...((props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0)
-      ? [["","","","","","","","TOTAL AFTER DISCOUNT", props.afterDiscount]]
-      : []),
-    ["","","","","","","","TRANSPORTATION CHARGES", props.discounts.transportationAmount],
-    ["","","","","","","","PACKING CHARGES", props.discounts.packingAmount],
-    ["","","","","","","","TAXABLE VALUE BEFORE GST", props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount],
-    ["","","","","","","","GST @ 18%",                props.gst],
-    ["","","","","","","","GRAND TOTAL",              props.grandTotal],
-    [],
-    ["TERMS & CONDITIONS:"],
-    ...TERMS.map((t) => [t]),
-    [],
-    ["BANK DETAILS:"],
-    ["Account Name: PRESTAIR SYSTEMS LLP"],
-    ["Account No: 4513086230  |  IFSC: KKBK0000154  |  Bank: Kotak Mahindra Bank, Sector 51 Noida"],
-    ["GST: 09AATFP8342B1ZX"],
-  ];
+  const wb = XLSX.utils.book_new();
+
+  // Determine if any discount exists
+  const hasDiscount = props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0;
+
+  // ── Build rows ──────────────────────────────────────────────────────────────
+  const data: unknown[][] = [];
+  const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
+  let r = 0; // current row index
+
+  // Header area (first page)
+  data.push(["", "PRESTAIR SYSTEMS LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "Commercial Food Service Equipments | Since 1982"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push([]); r++;
+
+  // Date & Quotation No on same line
+  data.push([`Date:${fmtDateDisplay(props.date)}`, "", "", "", "", `Quotation No: ${props.quotationNo}`]); r++;
+  data.push([]); r++;
+
+  // Party details
+  data.push(["", `M/S: ${props.partyName}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  if (props.partyAddress) {
+    const addrLines = props.partyAddress.split("\n").filter(Boolean);
+    for (const line of addrLines) {
+      data.push(["", line]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+    }
+  }
+  if (props.partyGST) {
+    data.push(["", `GST: ${props.partyGST}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  }
+  data.push([]); r++;
+
+  // Kind Attention
+  if (props.attention) {
+    data.push(["", `Kind Attention: ${props.attention}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  }
+
+  // Subject
+  data.push(["", `SUBJECT: ${props.subject}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push([]); r++;
+
+  // Table header
+  const headerRow = r;
+  data.push(["SL NO", "DESCRIPTION", "SIZE", "H.S.N CODE", "QTY", "RATE", "AMOUNT"]);
+  r++;
+
+  // Item rows
+  for (const row of props.rows) {
+    if (row.rowType === "section") {
+      // Section header - merged across all columns
+      const heading = (row.desc || row.section || "").toUpperCase();
+      data.push([heading, "", "", "", "", "", ""]);
+      merges.push({ s: { r, c: 0 }, e: { r, c: 6 } });
+      r++;
+    } else {
+      // Item row: SL NO = itemCode, DESCRIPTION = desc + additionalColumn
+      const description = row.additionalColumn
+        ? `${row.desc}\n${row.additionalColumn}`
+        : row.desc;
+      data.push([
+        row.itemCode || row.slNo,
+        description,
+        row.size,
+        row.hsn,
+        row.qty || "1",
+        row.rate || "NQ",
+        row.amt !== null ? row.amt : "NQ",
+      ]);
+      r++;
+    }
+  }
+
+  // Totals section
+  data.push(["", "TOTAL", "", "", "", "", props.gross]); r++;
+  if (props.discounts.seasonal.enabled) {
+    data.push(["", "LESS- SEASONAL DISCOUNT", "", "", "", "", props.discounts.seasonal.amount]); r++;
+  }
+  if (props.discounts.special.enabled) {
+    data.push(["", "LESS- SPECIAL DISCOUNT", "", "", "", "", props.discounts.special.amount]); r++;
+  }
+  if (props.discounts.legacyAmount > 0) {
+    data.push(["", "LESS- DISCOUNT", "", "", "", "", props.discounts.legacyAmount]); r++;
+  }
+  if (hasDiscount) {
+    data.push(["", "TOTAL AFTER DISCOUNT", "", "", "", "", props.afterDiscount]); r++;
+  }
+  if (props.discounts.transportationAmount > 0) {
+    data.push(["", "TRANSPORTATION CHARGES", "", "", "", "", props.discounts.transportationAmount]); r++;
+  }
+  if (props.discounts.packingAmount > 0) {
+    data.push(["", "PACKING CHARGES", "", "", "", "", props.discounts.packingAmount]); r++;
+  }
+  data.push(["", "GST 18%", "", "", "", "", props.gst]); r++;
+  data.push(["", "GRAND TOTAL", "", "", "", "", props.grandTotal]); r++;
+  if (props.discounts.transportationAmount > 0 || props.discounts.packingAmount > 0) {
+    // Only show if there were additional charges
+  }
+  data.push(["", "TRANSPORTATION CHARGES AS ACTUAL", "", "", "", "", ""]); r++;
+  data.push([]); r++;
+
+  // Terms & Conditions
+  data.push(["", "Terms & Conditions:"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  for (const term of TERMS) {
+    data.push(["", term]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  }
+  data.push([]); r++;
+
+  // Bank Details
+  data.push(["", "BANK DETAILS"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "ACCOUNT NAME- PRESTAIR SYSTEMS LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "ACCOUNT NO - 4513086230"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "ACCOUNT TYPE- CURRENT ACCOUNT"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "IFSC CODE-KKBK0000154"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "BANK - KOTAK MAHINDRA BANK"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "BRANCH - SECTOR 51 NOIDA"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push([]); r++;
+  data.push(["", "GST NO-09AATFP8342B1ZX"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push([]); r++;
+  data.push([]); r++;
+  data.push(["", "For Prestair Systems LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+
+  // ── Create worksheet ────────────────────────────────────────────────────────
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws["!merges"] = props.rows.flatMap((row, index) => row.rowType === "section"
-    ? [{ s: { r: 9 + index, c: 0 }, e: { r: 9 + index, c: 8 } }]
-    : []);
+  ws["!merges"] = merges;
+
+  // Column widths matching A4 portrait (approx 80 chars wide)
   ws["!cols"] = [
-    { wch: 6 }, { wch: 12 }, { wch: 32 }, { wch: 34 },
-    { wch: 18 }, { wch: 10 }, { wch: 5 }, { wch: 14 }, { wch: 16 },
+    { wch: 8 },   // SL NO / Item Code
+    { wch: 42 },  // DESCRIPTION
+    { wch: 16 },  // SIZE
+    { wch: 10 },  // H.S.N CODE
+    { wch: 5 },   // QTY
+    { wch: 10 },  // RATE
+    { wch: 12 },  // AMOUNT
   ];
+
+  // Row heights - tighter for items, standard otherwise
+  ws["!rows"] = data.map((_, i) => {
+    if (i === headerRow) return { hpt: 20 }; // header
+    return { hpt: 15 };
+  });
+
+  // Page setup for A4 portrait
+  ws["!pageSetup"] = {
+    paperSize: 9, // A4
+    orientation: "portrait",
+    fitToWidth: 1,
+    fitToHeight: 0,
+    scale: 85,
+  };
+
+  // Print margins (inches)
+  ws["!margins"] = {
+    left: 0.4,
+    right: 0.4,
+    top: 0.8,
+    bottom: 0.8,
+    header: 0.3,
+    footer: 0.3,
+  };
+
   XLSX.utils.book_append_sheet(wb, ws, "Quotation");
-  XLSX.writeFile(wb, `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g,"-")}_${props.date}.xlsx`);
+  XLSX.writeFile(wb, `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g, "-")}_${props.date}.xlsx`);
 }
 
 // ── PDF (Matching original Prestair quotation format) ─────────────────────────
