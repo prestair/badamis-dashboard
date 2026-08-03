@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SavedQuotation } from "@/context/QuotationContext";
 import { QuotationDiscounts } from "@/lib/quotationAudit";
+import { PRESTAIR_LOGO_BASE64 } from "@/lib/prestairLogoData";
 
 type Props = {
   quotation?:    SavedQuotation;
@@ -315,7 +316,6 @@ async function buildQuotationPDF(props: Props) {
     { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
   ];
   // Load Prestair logo from embedded base64 (guaranteed to work)
-  const { PRESTAIR_LOGO_BASE64 } = await import("@/lib/prestairLogoData");
   const prestairLogo = PRESTAIR_LOGO_BASE64;
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
@@ -325,25 +325,12 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Prestair Systems LLP logo — top-left without border
-  // Convert base64 PNG to JPEG via canvas to remove alpha channel (jsPDF issue)
+  // Use raw base64 directly with jsPDF (most reliable method)
   try {
-    const logoImg = await new Promise<string>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL("image/jpeg", 0.95));
-      };
-      img.onerror = () => reject(new Error("Logo load failed"));
-      img.src = prestairLogo;
-    });
-    doc.addImage(logoImg, "JPEG", ML, 4, 55, 18);
-  } catch {
+    const raw = prestairLogo.replace(/^data:image\/\w+;base64,/, "");
+    doc.addImage(raw, "PNG", ML, 4, 55, 18, undefined, "FAST");
+  } catch (e) {
+    console.error("Logo addImage failed:", e);
     doc.setFont("helvetica", "bolditalic");
     doc.setFontSize(17);
     doc.setTextColor(37, 99, 235);
