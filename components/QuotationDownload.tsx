@@ -92,67 +92,55 @@ async function downloadExcel(props: Props) {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
-  // Determine if any discount exists
   const hasDiscount = props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0;
 
   // ── Build rows ──────────────────────────────────────────────────────────────
   const data: unknown[][] = [];
   const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
-  let r = 0; // current row index
+  let r = 0;
 
-  // Header area (first page)
-  data.push(["", "PRESTAIR SYSTEMS LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "Commercial Food Service Equipments | Since 1982"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  // Header
+  data.push(["", "PRESTAIR SYSTEMS LLP", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  data.push(["", "Commercial Food Service Equipments | Since 1982", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  data.push(["", "B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
-  // Date & Quotation No on same line
-  data.push([`Date:${fmtDateDisplay(props.date)}`, "", "", "", "", `Quotation No: ${props.quotationNo}`]); r++;
+  // Date & Quotation No
+  data.push([`Date: ${fmtDateDisplay(props.date)}`, "", "", "", "", "", "", `Quotation No: ${props.quotationNo}`, ""]); r++;
   data.push([]); r++;
 
   // Party details
-  data.push(["", `M/S: ${props.partyName}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", `M/S: ${props.partyName}`, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   if (props.partyAddress) {
-    const addrLines = props.partyAddress.split("\n").filter(Boolean);
-    for (const line of addrLines) {
-      data.push(["", line]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-    }
+    data.push(["", props.partyAddress, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   }
   if (props.partyGST) {
-    data.push(["", `GST: ${props.partyGST}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+    data.push(["", `GST: ${props.partyGST}`, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   }
   data.push([]); r++;
-
-  // Kind Attention
   if (props.attention) {
-    data.push(["", `Kind Attention: ${props.attention}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+    data.push(["", `Kind Attention: ${props.attention}`, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   }
-
-  // Subject
-  data.push(["", `SUBJECT: ${props.subject}`]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", `SUBJECT: ${props.subject}`, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
   // Table header
-  const headerRow = r;
-  data.push(["SL NO", "DESCRIPTION", "SIZE", "H.S.N CODE", "QTY", "RATE", "AMOUNT"]);
+  data.push(["SL NO", "ITEM CODE", "ITEM NAME", "ADDITIONAL DESCRIPTION", "SIZE", "HSN CODE", "QTY", "RATE", "AMOUNT"]);
   r++;
 
   // Item rows
   for (const row of props.rows) {
     if (row.rowType === "section") {
-      // Section header - merged across all columns
       const heading = (row.desc || row.section || "").toUpperCase();
-      data.push([heading, "", "", "", "", "", ""]);
-      merges.push({ s: { r, c: 0 }, e: { r, c: 6 } });
+      data.push([heading, "", "", "", "", "", "", "", ""]);
+      merges.push({ s: { r, c: 0 }, e: { r, c: 8 } });
       r++;
     } else {
-      // Item row: SL NO = itemCode, DESCRIPTION = desc + additionalColumn
-      const description = row.additionalColumn
-        ? `${row.desc}\n${row.additionalColumn}`
-        : row.desc;
       data.push([
-        row.itemCode || row.slNo,
-        description,
+        row.slNo,
+        row.itemCode,
+        row.desc,
+        row.additionalColumn,
         row.size,
         row.hsn,
         row.qty || "1",
@@ -163,91 +151,82 @@ async function downloadExcel(props: Props) {
     }
   }
 
-  // Totals section
-  data.push(["", "TOTAL", "", "", "", "", props.gross]); r++;
+  // Totals
+  data.push(["", "", "", "", "", "", "", "TOTAL", props.gross]); r++;
   if (props.discounts.seasonal.enabled) {
-    data.push(["", "LESS- SEASONAL DISCOUNT", "", "", "", "", props.discounts.seasonal.amount]); r++;
+    data.push(["", "", "", "", "", "", "", "LESS- SEASONAL DISCOUNT", props.discounts.seasonal.amount]); r++;
   }
   if (props.discounts.special.enabled) {
-    data.push(["", "LESS- SPECIAL DISCOUNT", "", "", "", "", props.discounts.special.amount]); r++;
+    data.push(["", "", "", "", "", "", "", "LESS- SPECIAL DISCOUNT", props.discounts.special.amount]); r++;
   }
   if (props.discounts.legacyAmount > 0) {
-    data.push(["", "LESS- DISCOUNT", "", "", "", "", props.discounts.legacyAmount]); r++;
+    data.push(["", "", "", "", "", "", "", "LESS- DISCOUNT", props.discounts.legacyAmount]); r++;
   }
   if (hasDiscount) {
-    data.push(["", "TOTAL AFTER DISCOUNT", "", "", "", "", props.afterDiscount]); r++;
+    data.push(["", "", "", "", "", "", "", "TOTAL AFTER DISCOUNT", props.afterDiscount]); r++;
   }
-  if (props.discounts.transportationAmount > 0) {
-    data.push(["", "TRANSPORTATION CHARGES", "", "", "", "", props.discounts.transportationAmount]); r++;
-  }
-  if (props.discounts.packingAmount > 0) {
-    data.push(["", "PACKING CHARGES", "", "", "", "", props.discounts.packingAmount]); r++;
-  }
-  data.push(["", "GST 18%", "", "", "", "", props.gst]); r++;
-  data.push(["", "GRAND TOTAL", "", "", "", "", props.grandTotal]); r++;
-  if (props.discounts.transportationAmount > 0 || props.discounts.packingAmount > 0) {
-    // Only show if there were additional charges
-  }
-  data.push(["", "TRANSPORTATION CHARGES AS ACTUAL", "", "", "", "", ""]); r++;
+  data.push(["", "", "", "", "", "", "", "GST 18%", props.gst]); r++;
+  data.push(["", "", "", "", "", "", "", "GRAND TOTAL", props.grandTotal]); r++;
+  data.push(["", "", "", "", "", "", "", "TRANSPORTATION CHARGES AS ACTUAL", ""]); r++;
   data.push([]); r++;
 
   // Terms & Conditions
-  data.push(["", "Terms & Conditions:"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "Terms & Conditions:", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   for (const term of TERMS) {
-    data.push(["", term]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+    data.push(["", term, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
   }
   data.push([]); r++;
 
   // Bank Details
-  data.push(["", "BANK DETAILS"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "ACCOUNT NAME- PRESTAIR SYSTEMS LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "ACCOUNT NO - 4513086230"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "ACCOUNT TYPE- CURRENT ACCOUNT"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "IFSC CODE-KKBK0000154"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "BANK - KOTAK MAHINDRA BANK"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
-  data.push(["", "BRANCH - SECTOR 51 NOIDA"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "BANK DETAILS", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  const bankLines = [
+    "ACCOUNT NAME- PRESTAIR SYSTEMS LLP",
+    "ACCOUNT NO - 4513086230",
+    "ACCOUNT TYPE- CURRENT ACCOUNT",
+    "IFSC CODE-KKBK0000154",
+    "BANK - KOTAK MAHINDRA BANK",
+    "BRANCH - SECTOR 51 NOIDA",
+    "",
+    "GST NO-09AATFP8342B1ZX",
+  ];
+  for (const line of bankLines) {
+    data.push(["", line, "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
+  }
   data.push([]); r++;
-  data.push(["", "GST NO-09AATFP8342B1ZX"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
   data.push([]); r++;
-  data.push([]); r++;
-  data.push(["", "For Prestair Systems LLP"]); merges.push({ s: { r, c: 1 }, e: { r, c: 6 } }); r++;
+  data.push(["", "For Prestair Systems LLP", "", "", "", "", "", "", ""]); merges.push({ s: { r, c: 1 }, e: { r, c: 8 } }); r++;
 
   // ── Create worksheet ────────────────────────────────────────────────────────
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws["!merges"] = merges;
 
-  // Column widths matching A4 portrait (approx 80 chars wide)
+  // Column widths for A4 portrait readability
   ws["!cols"] = [
-    { wch: 8 },   // SL NO / Item Code
-    { wch: 42 },  // DESCRIPTION
+    { wch: 6 },   // SL NO
+    { wch: 12 },  // ITEM CODE
+    { wch: 32 },  // ITEM NAME
+    { wch: 34 },  // ADDITIONAL DESCRIPTION
     { wch: 16 },  // SIZE
-    { wch: 10 },  // H.S.N CODE
+    { wch: 10 },  // HSN CODE
     { wch: 5 },   // QTY
-    { wch: 10 },  // RATE
-    { wch: 12 },  // AMOUNT
+    { wch: 12 },  // RATE
+    { wch: 14 },  // AMOUNT
   ];
 
-  // Row heights - tighter for items, standard otherwise
-  ws["!rows"] = data.map((_, i) => {
-    if (i === headerRow) return { hpt: 20 }; // header
-    return { hpt: 15 };
-  });
-
-  // Page setup for A4 portrait
+  // Page setup for A4 portrait print
   ws["!pageSetup"] = {
-    paperSize: 9, // A4
+    paperSize: 9,
     orientation: "portrait",
     fitToWidth: 1,
     fitToHeight: 0,
-    scale: 85,
+    scale: 75,
   };
 
-  // Print margins (inches)
   ws["!margins"] = {
-    left: 0.4,
-    right: 0.4,
-    top: 0.8,
-    bottom: 0.8,
+    left: 0.3,
+    right: 0.3,
+    top: 0.7,
+    bottom: 0.7,
     header: 0.3,
     footer: 0.3,
   };
