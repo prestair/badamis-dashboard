@@ -325,19 +325,7 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Prestair Systems LLP logo — top-left without border
-  // Use full data URI directly with jsPDF
-  try {
-    doc.addImage(prestairLogo, "PNG", ML, 4, 55, 18);
-  } catch (e) {
-    console.error("Logo addImage failed:", e);
-    doc.setFont("helvetica", "bolditalic");
-    doc.setFontSize(17);
-    doc.setTextColor(37, 99, 235);
-    doc.text("Prestair", ML + 3, 12);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.text("Systems LLP  |  SINCE 1982", ML + 3, 19);
-  }
+  doc.addImage(prestairLogo, "JPEG", ML, 4, 55, 18);
 
   // Company details under the logo.
   doc.setFont("helvetica", "bold");
