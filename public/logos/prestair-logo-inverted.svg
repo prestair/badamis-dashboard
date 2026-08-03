@@ -1,18 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 180" width="550" height="180">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 65" width="200" height="65">
   <!-- White background -->
-  <rect width="550" height="180" fill="white"/>
-  
-  <!-- PS circle (was red, now light grey) -->
-  <circle cx="380" cy="55" r="38" fill="#d0d0d0"/>
-  <!-- PS text inside circle -->
-  <text x="380" y="68" font-family="Georgia, serif" font-weight="bold" font-style="italic" font-size="38" fill="#1a3a6b" text-anchor="middle">PS</text>
+  <rect width="200" height="65" fill="white"/>
   
   <!-- Prestair text - bold italic dark blue -->
-  <text x="20" y="70" font-family="Georgia, serif" font-weight="bold" font-style="italic" font-size="62" fill="#1a3a6b">Prestair</text>
+  <text x="5" y="24" font-family="Georgia, serif" font-weight="bold" font-style="italic" font-size="24" fill="#1a3a6b">Prestair</text>
   
   <!-- Systems LLP text -->
-  <text x="20" y="120" font-family="Arial, sans-serif" font-weight="bold" font-size="38" fill="#1a3a6b">Systems LLP</text>
+  <text x="5" y="44" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#1a3a6b">Systems <tspan font-size="11">LLP</tspan></text>
   
   <!-- SINCE 1982 text -->
-  <text x="20" y="155" font-family="Arial, sans-serif" font-weight="bold" font-size="24" fill="#1a3a6b">SINCE 1982</text>
+  <text x="5" y="60" font-family="Arial, sans-serif" font-weight="bold" font-size="10" fill="#1a3a6b">SINCE 1982</text>
 </svg>

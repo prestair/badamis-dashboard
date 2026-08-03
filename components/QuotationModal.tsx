@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuotations, SavedQuotation, SavedRowState } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
 import { PrestairBrandHeader } from "@/components/PrestairLogo";
@@ -232,6 +232,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
   function deleteRow(uid: string) {
     setItemRows((prev) => renumberItemRows(prev.filter((r) => r.uid !== uid)));
+    setSaved(false);
+  }
+
+  function moveRow(uid: string, direction: "up" | "down") {
+    setItemRows((prev) => {
+      const idx = prev.findIndex((r) => r.uid === uid);
+      if (idx === -1) return prev;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return renumberItemRows(next);
+    });
+    setSaved(false);
+  }
+
+  function insertRowAfter(idx: number) {
+    setItemRows((prev) => {
+      const next = [...prev];
+      const itemCount = next.filter((r) => r.rowType === "item").length;
+      next.splice(idx + 1, 0, blankRow(itemCount + 1));
+      return renumberItemRows(next);
+    });
     setSaved(false);
   }
 
@@ -622,6 +645,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:100}}>RATE (₹)</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:110}}>AMOUNT (₹)</th>
+                        <th className="border border-slate-600 px-1 py-2.5 text-center" style={{width:44}}>↕</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:30}}>🗑</th>
                       </tr>
                     </thead>
@@ -640,6 +664,14 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                                     placeholder="Enter section heading, e.g. Display"
                                     className="w-full rounded border border-blue-200 bg-white px-3 py-1.5 text-sm font-bold text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-300"
                                   />
+                                </div>
+                              </td>
+                              <td className="border border-blue-200 px-1 py-1 text-center">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <button type="button" onClick={() => moveRow(row.uid, "up")} disabled={idx === 0}
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed text-sm leading-none" title="Move up" aria-label="Move section up">▲</button>
+                                  <button type="button" onClick={() => moveRow(row.uid, "down")} disabled={idx === itemRows.length - 1}
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed text-sm leading-none" title="Move down" aria-label="Move section down">▼</button>
                                 </div>
                               </td>
                               <td className="border border-blue-200 px-1 py-1 text-center">
@@ -724,6 +756,16 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                                 : <span className="text-black font-normal">—</span>}
                             </td>
 
+                            {/* MOVE ROW */}
+                            <td className="border border-slate-100 px-1 py-1 text-center">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <button type="button" onClick={() => moveRow(row.uid, "up")} disabled={idx === 0}
+                                  className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs leading-none" title="Move up" aria-label="Move row up">▲</button>
+                                <button type="button" onClick={() => moveRow(row.uid, "down")} disabled={idx === itemRows.length - 1}
+                                  className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs leading-none" title="Move down" aria-label="Move row down">▼</button>
+                              </div>
+                            </td>
+
                             {/* DELETE ROW */}
                             <td className="border border-slate-100 px-1 py-1 text-center">
                               <button onClick={() => deleteRow(row.uid)}
@@ -732,7 +774,26 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                             </td>
                           </tr>
                         );
-                      })}
+                      }).reduce<React.ReactNode[]>((acc, rowEl, idx) => {
+                        acc.push(rowEl);
+                        // After the last item in a section (before next section or end), show "+ Add Row" button
+                        const row = itemRows[idx];
+                        const nextRow = itemRows[idx + 1];
+                        if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
+                          acc.push(
+                            <tr key={`insert-after-${row.uid}`} className="bg-slate-50/50">
+                              <td colSpan={11} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                                <button type="button" onClick={() => insertRowAfter(idx)}
+                                  className="text-[10px] font-bold text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-3 py-0.5 rounded transition-colors"
+                                  title="Insert row here">
+                                  + Add Row
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return acc;
+                      }, [])}
                     </tbody>
                   </table>
                 </div>

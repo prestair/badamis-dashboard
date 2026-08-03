@@ -318,46 +318,25 @@ async function buildQuotationPDF(props: Props) {
   for (const l of logoFiles) logos.push(await loadImg(l.file));
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 1 HEADER — Inverted logo: white bg, dark blue text, grey PS area
+  // PAGE 1 HEADER — Inverted logo from prestair-inverted.png
   // ══════════════════════════════════════════════════════════════════════════
 
-  // Draw logo directly with jsPDF (no external image needed)
-  // Grey PS circle (was red in original)
-  doc.setFillColor(200, 200, 200);
-  doc.circle(ML + 46, 10, 4.5, "F");
-  doc.setFont("helvetica", "bolditalic");
-  doc.setFontSize(6.5);
-  doc.setTextColor(26, 58, 107);
-  doc.text("PS", ML + 46, 11, { align: "center" });
-
-  // "Prestair" — bold italic dark blue
-  doc.setFont("helvetica", "bolditalic");
-  doc.setFontSize(18);
-  doc.setTextColor(26, 58, 107);
-  doc.text("Prestair", ML + 1, 13);
-
-  // "Systems LLP"
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(26, 58, 107);
-  doc.text("Systems LLP", ML + 1, 19);
-
-  // "SINCE 1982"
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(26, 58, 107);
-  doc.text("SINCE 1982", ML + 1, 23.5);
+  // Load the inverted Prestair logo image
+  const prestairLogo = await loadImg("prestair-inverted.png");
+  if (prestairLogo) {
+    doc.addImage(prestairLogo, "PNG", ML - 2, 4, 55, 18);
+  }
 
   // Company details — dark blue
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(26, 58, 107);
-  doc.text("Commercial Food Service Equipments", ML, 28);
+  doc.text("Commercial Food Service Equipments", ML, 25.5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(60, 60, 60);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 31.5);
-  doc.text("India", ML, 34.5);
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 29);
+  doc.text("India", ML, 32);
 
   // Certification logos top-right, without an enclosing border.
   const logoBoxX = 130;
