@@ -314,8 +314,9 @@ async function buildQuotationPDF(props: Props) {
     { file: "gacb.png", fmt: "PNG", w: 9, h: 9 },
     { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
   ];
-  // Load Prestair logo at full quality without any color processing
-  const prestairLogo = await loadImg("logo2-1.png");
+  // Load Prestair logo from embedded base64 (guaranteed to work)
+  const { PRESTAIR_LOGO_BASE64 } = await import("@/lib/prestairLogoData");
+  const prestairLogo = PRESTAIR_LOGO_BASE64;
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
 
