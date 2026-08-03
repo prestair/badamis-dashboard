@@ -205,9 +205,43 @@ async function downloadExcel(props: Props) {
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(wbOut);
     zip.file("xl/media/image1.png", logoBytes);
+
+    // Load certification logos
+    const certFiles = ["uaf.webp", "ce.jpg", "images.png", "iaf.png", "gacb.png", "iso.png"];
+    const certImages: { name: string; bytes: Uint8Array }[] = [];
+    for (let i = 0; i < certFiles.length; i++) {
+      try {
+        const res = await fetch(`/logos/${certFiles[i]}`);
+        if (res.ok) {
+          const ext = certFiles[i].split(".").pop() || "png";
+          certImages.push({ name: `image${i + 2}.${ext}`, bytes: new Uint8Array(await res.arrayBuffer()) });
+        }
+      } catch { /* skip */ }
+    }
+    // Add cert images to media
+    for (const img of certImages) zip.file(`xl/media/${img.name}`, img.bytes);
+
     const emu = (px: number) => Math.round(px * 9525);
-    zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(180)}" cy="${emu(50)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(180)}" cy="${emu(50)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>`);
-    zip.file("xl/drawings/_rels/drawing1.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>`);
+    // Build drawing XML with all images
+    const certSize = emu(45); // each cert logo ~45px
+    const certY = 0;
+    const startCol = 5; // Start from HSN column area (right side)
+    let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(180)}" cy="${emu(50)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(180)}" cy="${emu(50)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+    // Add cert logos positioned right-side, row 0
+    for (let i = 0; i < certImages.length; i++) {
+      const col = startCol + Math.floor(i * 0.7); // spread across cols 5-8
+      const colOff = (i % 2 === 0) ? 0 : emu(14);
+      const rIdNum = i + 2;
+      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>${colOff}</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${certSize}" cy="${certSize}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${certSize}" cy="${certSize}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+    }
+    zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${drawingPics}</xdr:wsDr>`);
+    // Build rels for all images
+    let rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>`;
+    for (let i = 0; i < certImages.length; i++) {
+      rels += `<Relationship Id="rId${i + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${certImages[i].name}"/>`;
+    }
+    rels += `</Relationships>`;
+    zip.file("xl/drawings/_rels/drawing1.xml.rels", rels);
     let wsRels = "";
     try { wsRels = await (zip.file("xl/worksheets/_rels/sheet1.xml.rels")?.async("string") ?? ""); } catch { /* */ }
     if (!wsRels || !wsRels.includes("Relationships")) wsRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`;
@@ -217,6 +251,9 @@ async function downloadExcel(props: Props) {
     if (sheetXml && !sheetXml.includes("<drawing")) { sheetXml = sheetXml.replace("</worksheet>", `<drawing r:id="rId1"/></worksheet>`); zip.file("xl/worksheets/sheet1.xml", sheetXml); }
     let ct = await (zip.file("[Content_Types].xml")?.async("string") ?? "");
     if (ct && !ct.includes('Extension="png"')) ct = ct.replace("</Types>", `<Default Extension="png" ContentType="image/png"/></Types>`);
+    if (ct && !ct.includes('Extension="jpg"')) ct = ct.replace("</Types>", `<Default Extension="jpg" ContentType="image/jpeg"/></Types>`);
+    if (ct && !ct.includes('Extension="jpeg"')) ct = ct.replace("</Types>", `<Default Extension="jpeg" ContentType="image/jpeg"/></Types>`);
+    if (ct && !ct.includes('Extension="webp"')) ct = ct.replace("</Types>", `<Default Extension="webp" ContentType="image/webp"/></Types>`);
     if (ct && !ct.includes("drawing1.xml")) ct = ct.replace("</Types>", `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
     if (ct) zip.file("[Content_Types].xml", ct);
     const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -360,18 +397,19 @@ async function buildQuotationPDF(props: Props) {
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: ML },
-    head: [["SL NO", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
+    head: [["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
     body: (() => {
       const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
       let lastSection = "";
       let insideExplicitSection = false;
+      let slNo = 0;
       props.rows.forEach((r) => {
         if (r.rowType === "section") {
           insideExplicitSection = true;
           const heading = (r.desc || r.section || "Untitled Section").toUpperCase();
           body.push([{
             content: heading,
-            colSpan: 8,
+            colSpan: 9,
             styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [239, 246, 255], textColor: [30, 64, 175] },
           }] as unknown as string[]);
           lastSection = "";
@@ -383,12 +421,14 @@ async function buildQuotationPDF(props: Props) {
         if (section && section !== lastSection) {
           body.push([{
             content: section.toUpperCase(),
-            colSpan: 8,
+            colSpan: 9,
             styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
           }] as unknown as string[]);
           lastSection = section;
         }
+        slNo++;
         body.push([
+          String(slNo),
           r.itemCode || "",
           r.desc || "",
           r.additionalColumn || "",
@@ -422,14 +462,15 @@ async function buildQuotationPDF(props: Props) {
       valign: "middle",
     },
     columnStyles: {
-      0: { cellWidth: 12, halign: "center", fontStyle: "bold" },
-      1: { cellWidth: 26, halign: "center" },
-      2: { cellWidth: 72, halign: "left" },
-      3: { cellWidth: 22, halign: "center" },
-      4: { cellWidth: 14, halign: "center" },
-      5: { cellWidth: 10, halign: "center" },
-      6: { cellWidth: 16, halign: "center" },
-      7: { cellWidth: 18, halign: "center", fontStyle: "bold" },
+      0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 14, halign: "center", fontStyle: "bold" },
+      2: { cellWidth: 24, halign: "center" },
+      3: { cellWidth: 64, halign: "left" },
+      4: { cellWidth: 20, halign: "center" },
+      5: { cellWidth: 12, halign: "center" },
+      6: { cellWidth: 10, halign: "center" },
+      7: { cellWidth: 16, halign: "center" },
+      8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
     },
     tableWidth: CW,
     theme: "grid",

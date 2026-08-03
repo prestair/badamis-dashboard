@@ -4,7 +4,6 @@ import ChartsSection from "@/components/ChartsSection";
 import HeaderActions from "@/components/HeaderActions";
 import UserBar from "@/components/UserBar";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import DashboardToolbar from "@/components/DashboardToolbar";
 import PrestairLogo, { PRESTAIR_ADDRESS } from "@/components/PrestairLogo";
 
 const TERMS = [
@@ -70,7 +69,6 @@ export default function DashboardPage() {
 
           {/* Rows 2 & 3: Action buttons + number row (client — needs context) */}
           <HeaderActions />
-          <DashboardToolbar />
 
         </div>
       </header>

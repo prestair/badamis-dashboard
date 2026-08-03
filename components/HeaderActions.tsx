@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuotations, SavedQuotation } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -28,16 +28,18 @@ export default function HeaderActions() {
     searchQuery,
     setSearchQuery,
     deleteQuotation,
+    saveQuotation,
     refresh,
     loading,
     dateFrom,
     dateTo,
+    setDateFrom,
+    setDateTo,
   } = useQuotations();
   const [showCreate,    setShowCreate]    = useState(false);
   const [showItemNames, setShowItemNames] = useState(false);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [page,           setPage]           = useState(1);
   const [historyFor,     setHistoryFor]     = useState<string | null>(null);
@@ -45,6 +47,13 @@ export default function HeaderActions() {
 
   const totalGrand = filteredQuotations.reduce((sum, quotation) => sum + quotation.grandTotal, 0);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
+
+  // Import template state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState("");
+  const importFileRef = useRef<HTMLInputElement>(null);
   const fmtWhen = (value: string) => {
     if (!value) return "Time unavailable";
     const parsed = new Date(value);
@@ -71,15 +80,13 @@ export default function HeaderActions() {
   const lastShown = Math.min(startIndex + pageSize, filteredQuotations.length);
 
   async function handleDelete(dbId: string) {
-    if (confirmDelete !== dbId) {
-      setConfirmDelete(dbId);
-      setTimeout(() => setConfirmDelete((cur) => (cur === dbId ? null : cur)), 3000);
-      return;
-    }
+    const q = quotations.find((x) => x.dbId === dbId);
+    const label = q ? `${q.quotationNo} — ${q.partyName}` : dbId;
+    const confirmed = window.confirm(`Are you sure you want to delete this quotation?\n\n${label}\n\nThis action cannot be undone.`);
+    if (!confirmed) return;
 
     try {
       await deleteQuotation(dbId);
-      setConfirmDelete(null);
     } catch (error) {
       console.error("Delete failed", error);
       alert(error instanceof Error ? error.message : "Delete failed");
@@ -97,7 +104,7 @@ export default function HeaderActions() {
       quotation.partyName,
       quotation.partyAddress,
       quotation.grandTotal,
-      quotation.editedBy || quotation.createdBy || "Unknown",
+      quotation.createdBy || "Unknown",
       quotation.editCount,
     ].map(escapeCell).join(","));
     const csv = `\uFEFF${[headers.map(escapeCell).join(","), ...rows].join("\n")}`;
@@ -130,6 +137,75 @@ export default function HeaderActions() {
       alert(`Print failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setPrintingId(null);
+    }
+  }
+
+  // ── Import / Export Template ────────────────────────────────────────────────
+  async function handleExportTemplate() {
+    const { exportTemplate } = await import("@/lib/quotationTemplate");
+    await exportTemplate();
+  }
+
+  function generateNextQuotationNo(fullName: string): string {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+    const year = fyStartYear % 100;
+    const nextYear = (fyStartYear + 1) % 100;
+    const fyPrefix = `PS/${year}-${nextYear}/QT-`;
+    let maxNum = 0;
+    for (const q of quotations) {
+      const qNo = q.quotationNo || "";
+      if (qNo.startsWith(fyPrefix)) {
+        const match = qNo.slice(fyPrefix.length).trim().match(/^(\d+)/);
+        if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
+      }
+    }
+    const floor = fyStartYear === 2026 ? 553 : 0;
+    const num = String(Math.max(maxNum, floor) + 1).padStart(4, "0");
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    const initials = parts.length === 0 ? "" : parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return `PS/${year}-${nextYear}/QT-${num}${initials ? " " + initials : ""}`;
+  }
+
+  async function handleImport() {
+    if (!importFile) { setImportError("Please select a file"); return; }
+    setImportLoading(true);
+    setImportError("");
+    try {
+      const { importTemplate } = await import("@/lib/quotationTemplate");
+      const result = await importTemplate(importFile);
+      const today = new Date().toISOString().split("T")[0];
+      const finalUser = result.userName || "Unknown";
+      const finalPartyName = result.partyName || "Unknown";
+      const qNo = generateNextQuotationNo(finalUser);
+      const discount = result.discounts.seasonal.amount + result.discounts.special.amount;
+
+      await saveQuotation({
+        quotationNo: qNo,
+        date: today,
+        partyName: finalPartyName,
+        partyAddress: result.partyAddress || "",
+        partyGST: "",
+        subject: result.subject || "",
+        attention: result.attention || "",
+        rows: result.rows,
+        gross: result.gross,
+        discount,
+        discounts: result.discounts,
+        afterDiscount: result.afterDiscount,
+        gst: result.gst,
+        grandTotal: result.grandTotal,
+      }, finalUser);
+
+      setShowImportModal(false);
+      setImportFile(null);
+      alert(`Quotation imported! No: ${qNo}`);
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImportLoading(false);
     }
   }
 
@@ -204,19 +280,36 @@ export default function HeaderActions() {
 
       {/* ── ROW 3: Quotations table ── */}
       <div className="pb-4 pt-2">
-        <div className="flex flex-wrap items-center justify-end gap-2 px-1 pb-2">
-          <span className="whitespace-nowrap text-[10px] text-slate-500">
-            {filteredQuotations.length} found
-          </span>
-          <button
-            type="button"
-            onClick={exportDisplayedCSV}
-            disabled={loading || visibleQuotations.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-            title={`Export the ${visibleQuotations.length} quotations currently displayed`}
-          >
-            📥 CSV ({visibleQuotations.length})
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
+          {/* Left: Date filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Filter:</span>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              className="bg-white border border-slate-200 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none focus:border-blue-400 w-[105px]" title="From date" />
+            <span className="text-slate-400 text-[10px]">→</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              className="bg-white border border-slate-200 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none focus:border-blue-400 w-[105px]" title="To date" />
+            {(dateFrom || dateTo) && (
+              <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-[10px] text-red-500 hover:text-red-700 font-bold" aria-label="Clear date filter">✕</button>
+            )}
+          </div>
+          {/* Right: Import/Export + CSV */}
+          <div className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-[10px] text-slate-500">{filteredQuotations.length} found</span>
+            <button type="button" onClick={handleExportTemplate}
+              className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-95"
+              title="Download blank quotation template">↓ Export Template</button>
+            <button type="button" onClick={() => { setImportFile(null); setImportError(""); setShowImportModal(true); }}
+              className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-bold text-violet-700 transition-all hover:bg-violet-100 active:scale-95"
+              title="Import filled template as quotation">↑ Import Template</button>
+            <button type="button" onClick={exportDisplayedCSV}
+              disabled={loading || visibleQuotations.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              title={`Export the ${visibleQuotations.length} quotations currently displayed`}>
+              📥 CSV ({visibleQuotations.length})
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -263,7 +356,7 @@ export default function HeaderActions() {
                       aria-controls={`quotation-history-${q.dbId}`}
                     >
                       <span className="mr-1" aria-hidden="true">👤</span>
-                      {q.editedBy || q.createdBy || "Unknown"} ({q.editCount})
+                      {q.createdBy || "Unknown"} ({q.editCount})
                     </button>
                     {historyFor === q.dbId && (
                       <div
@@ -374,12 +467,8 @@ export default function HeaderActions() {
                       </button>
                       {loggedRole === "admin" && (
                         <button onClick={() => handleDelete(q.dbId)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                            confirmDelete === q.dbId
-                              ? "bg-red-600 text-white animate-pulse"
-                              : "bg-red-100 hover:bg-red-200 text-red-700"
-                          }`}>
-                          {confirmDelete === q.dbId ? "Confirm?" : "🗑 Del"}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold transition-all bg-red-100 hover:bg-red-200 text-red-700">
+                          Del
                         </button>
                       )}
                     </div>
@@ -440,6 +529,33 @@ export default function HeaderActions() {
           onClose={() => setViewQuotation(null)}
           onEdit={(q) => { setViewQuotation(null); setEditQuotation(q); }}
         />
+      )}
+
+      {/* Import Template Modal — just file picker */}
+      {showImportModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={() => setShowImportModal(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-800">Import Quotation</h3>
+                <button type="button" onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+              </div>
+              {importError && <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded px-3 py-2">{importError}</p>}
+              <p className="text-xs text-slate-500">Select a filled template. User name, client, address, subject, discounts sab template se read honge.</p>
+              <input ref={importFileRef} type="file" accept=".xlsx,.xls"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100" />
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={handleImport} disabled={importLoading}
+                  className="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold shadow transition-all active:scale-95 disabled:opacity-50">
+                  {importLoading ? "Importing..." : "Import & Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </>
   );

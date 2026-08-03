@@ -49,6 +49,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
   > = [];
   let itemNumber = 0;
   let lastLegacySection = "";
+  let hasExplicitSections = q.rows.some((row) => row.rowType === "section");
   q.rows.forEach((row, index) => {
     if (row.rowType === "section") {
       displayRows.push({
@@ -60,12 +61,15 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
       return;
     }
 
-    const legacySection = row.section && row.section !== "Custom"
-      ? (SECTION_LABELS[row.section] ?? row.section)
-      : "";
-    if (legacySection && legacySection !== lastLegacySection) {
-      displayRows.push({ kind: "section", key: `legacy-section-${index}`, title: legacySection });
-      lastLegacySection = legacySection;
+    // Only show auto-detected legacy sections if there are NO explicit section rows
+    if (!hasExplicitSections) {
+      const legacySection = row.section && row.section !== "Custom"
+        ? (SECTION_LABELS[row.section] ?? row.section)
+        : "";
+      if (legacySection && legacySection !== lastLegacySection) {
+        displayRows.push({ kind: "section", key: `legacy-section-${index}`, title: legacySection });
+        lastLegacySection = legacySection;
+      }
     }
     displayRows.push({ kind: "item", key: `item-${row.id}-${index}`, itemNumber: ++itemNumber, row });
   });

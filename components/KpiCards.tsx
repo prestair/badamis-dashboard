@@ -59,8 +59,8 @@ export default function KpiCards() {
     }
 
     const gross = filteredQuotations.reduce((sum, quotation) => sum + quotation.gross, 0);
-    const discount = filteredQuotations.reduce((sum, quotation) => sum + quotation.discount, 0);
     const afterDiscount = filteredQuotations.reduce((sum, quotation) => sum + quotation.afterDiscount, 0);
+    const discount = gross - afterDiscount;
     const gst = filteredQuotations.reduce((sum, quotation) => sum + quotation.gst, 0);
     const grandTotal = filteredQuotations.reduce((sum, quotation) => sum + quotation.grandTotal, 0);
 
