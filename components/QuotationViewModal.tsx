@@ -253,11 +253,11 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
                   <span className="text-xs font-semibold tracking-wide">TRANSPORTATION CHARGES</span>
-                  <span className="font-mono font-bold">₹ {fmt(q.discounts.transportationAmount)}</span>
+                  <span className="font-mono font-bold">{q.discounts.transportationAmount === 0 ? "As Per Actuals" : `₹ ${fmt(q.discounts.transportationAmount)}`}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
                   <span className="text-xs font-semibold tracking-wide">PACKING CHARGES</span>
-                  <span className="font-mono font-bold">₹ {fmt(q.discounts.packingAmount)}</span>
+                  <span className="font-mono font-bold">{q.discounts.packingAmount === 0 ? "As Per Actuals" : `₹ ${fmt(q.discounts.packingAmount)}`}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-100 px-6 py-2 font-bold text-cyan-950">
                   <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE BEFORE GST</span>

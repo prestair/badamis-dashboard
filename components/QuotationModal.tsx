@@ -876,7 +876,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                         step="0.01"
                         value={transportationCharges}
                         onChange={(event) => setTransportationCharges(event.target.value)}
-                        placeholder="0"
+                        placeholder="As Per Actuals"
                         className="w-36 rounded border border-cyan-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
                       />
                     </div>
@@ -892,7 +892,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                         step="0.01"
                         value={packingCharges}
                         onChange={(event) => setPackingCharges(event.target.value)}
-                        placeholder="0"
+                        placeholder="As Per Actuals"
                         className="w-36 rounded border border-cyan-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
                       />
                     </div>

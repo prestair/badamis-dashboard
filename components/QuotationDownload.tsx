@@ -156,8 +156,18 @@ async function downloadExcel(props: Props) {
   if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", safeNum(props.discounts.special.amount), ts);
   if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
   if (hasDiscount) pushT("TOTAL AFTER DISCOUNT", safeNum(props.afterDiscount), ts);
-  pushT("TRANSPORTATION CHARGES", safeNum(props.discounts.transportationAmount), ts);
-  pushT("PACKING CHARGES", safeNum(props.discounts.packingAmount), ts);
+  if (props.discounts.transportationAmount === 0) {
+    data.push(["", "", "", "", "", sc("TRANSPORTATION CHARGES", ts), sc("", ts), sc("", ts), sc("As Per Actuals", ts)]);
+    merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
+  } else {
+    pushT("TRANSPORTATION CHARGES", safeNum(props.discounts.transportationAmount), ts);
+  }
+  if (props.discounts.packingAmount === 0) {
+    data.push(["", "", "", "", "", sc("PACKING CHARGES", ts), sc("", ts), sc("", ts), sc("As Per Actuals", ts)]);
+    merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
+  } else {
+    pushT("PACKING CHARGES", safeNum(props.discounts.packingAmount), ts);
+  }
   pushT("TAXABLE VALUE BEFORE GST", safeNum(props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount), ts);
   pushT("GST 18%", safeNum(props.gst), ts);
   const gs = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "FFD700" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
@@ -503,8 +513,8 @@ async function buildQuotationPDF(props: Props) {
       ...((props.discounts.seasonal.enabled || props.discounts.special.enabled || props.discounts.legacyAmount > 0)
         ? [["TOTAL AFTER DISCOUNT", fmtNum(safeNum(props.afterDiscount))]]
         : []),
-      ["TRANSPORTATION CHARGES", fmtNum(safeNum(props.discounts.transportationAmount))],
-      ["PACKING CHARGES", fmtNum(safeNum(props.discounts.packingAmount))],
+      ["TRANSPORTATION CHARGES", props.discounts.transportationAmount === 0 ? "As Per Actuals" : fmtNum(safeNum(props.discounts.transportationAmount))],
+      ["PACKING CHARGES", props.discounts.packingAmount === 0 ? "As Per Actuals" : fmtNum(safeNum(props.discounts.packingAmount))],
       ["TAXABLE VALUE BEFORE GST", fmtNum(safeNum(props.afterDiscount + props.discounts.transportationAmount + props.discounts.packingAmount))],
       ["GST 18%", fmtNum(safeNum(props.gst))],
       ["GRAND TOTAL", fmtNum(safeNum(props.grandTotal))],
