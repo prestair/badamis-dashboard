@@ -485,6 +485,14 @@ async function buildQuotationPDF(props: Props) {
     rowPageBreak: "avoid",
     tableWidth: CW,
     theme: "grid",
+    didParseCell: (data) => {
+      if (data.section === "head") {
+        data.cell.styles.fillColor = [31, 78, 121];
+        data.cell.styles.textColor = [255, 255, 255];
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fontSize = 9.5;
+      }
+    },
     didDrawPage: (data) => {
       if (data.pageNumber === 1) return;
       // Footer logos on each page
