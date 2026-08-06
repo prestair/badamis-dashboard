@@ -474,14 +474,15 @@ async function buildQuotationPDF(props: Props) {
     columnStyles: {
       0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
       1: { cellWidth: 14, halign: "center", fontStyle: "bold" },
-      2: { cellWidth: 24, halign: "center" },
+      2: { cellWidth: 16, halign: "center" },
       3: { cellWidth: 64, halign: "left" },
-      4: { cellWidth: 20, halign: "center" },
+      4: { cellWidth: 28, halign: "center" },
       5: { cellWidth: 12, halign: "center" },
       6: { cellWidth: 10, halign: "center" },
       7: { cellWidth: 16, halign: "center" },
       8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
     },
+    rowPageBreak: "avoid",
     tableWidth: CW,
     theme: "grid",
     didDrawPage: (data) => {
