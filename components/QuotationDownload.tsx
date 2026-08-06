@@ -194,9 +194,9 @@ async function downloadExcel(props: Props) {
     { wch: 5 },   // SL NO
     { wch: 10 },  // ITEM CODE
     { wch: 22 },  // ITEM NAME
-    { wch: 50 },  // ADDITIONAL DESCRIPTION (widest)
+    { wch: 46 },  // ADDITIONAL DESCRIPTION (widest)
     { wch: 12 },  // SIZE
-    { wch: 8 },   // HSN CODE
+    { wch: 14 },  // HSN CODE
     { wch: 5 },   // QTY
     { wch: 10 },  // RATE
     { wch: 12 },  // AMOUNT
@@ -453,8 +453,8 @@ async function buildQuotationPDF(props: Props) {
     })(),
 
     headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
+      fillColor: [31, 78, 121],
+      textColor: [255, 255, 255],
       fontStyle: "bold",
       fontSize: 9.5,
       lineWidth: 0.15,
@@ -472,12 +472,12 @@ async function buildQuotationPDF(props: Props) {
       valign: "middle",
     },
     columnStyles: {
-      0: { cellWidth: 10, halign: "center", fillColor: [239, 246, 255], textColor: [30, 64, 175] },
-      1: { cellWidth: 14, halign: "center", fillColor: [239, 246, 255], textColor: [30, 64, 175] },
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 14, halign: "center" },
       2: { cellWidth: 16, halign: "center" },
-      3: { cellWidth: 64, halign: "left" },
+      3: { cellWidth: 58, halign: "left" },
       4: { cellWidth: 28, halign: "center" },
-      5: { cellWidth: 12, halign: "center" },
+      5: { cellWidth: 18, halign: "center" },
       6: { cellWidth: 10, halign: "center" },
       7: { cellWidth: 16, halign: "center" },
       8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
