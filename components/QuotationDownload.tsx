@@ -134,7 +134,7 @@ async function downloadExcel(props: Props) {
   data.push([]); r++;
 
   // Table header
-  const th = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  const th = { font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   data.push([sc("SL NO", th), sc("ITEM CODE", th), sc("ITEM NAME", th), sc("ADDITIONAL DESCRIPTION", th), sc("SIZE", th), sc("HSN CODE", th), sc("QTY", th), sc("RATE", th), sc("AMOUNT", th)]); r++;
 
   // Item rows
@@ -456,7 +456,7 @@ async function buildQuotationPDF(props: Props) {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       fontStyle: "bold",
-      fontSize: 7.5,
+      fontSize: 9.5,
       lineWidth: 0.15,
       lineColor: [0, 0, 0],
       halign: "center",
