@@ -134,7 +134,7 @@ async function downloadExcel(props: Props) {
   data.push([]); r++;
 
   // Table header
-  const th = { font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+  const th = { font: { bold: true, sz: 12, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "C8C8C8" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   data.push([sc("SL NO", th), sc("ITEM CODE", th), sc("ITEM NAME", th), sc("ADDITIONAL DESCRIPTION", th), sc("SIZE", th), sc("HSN CODE", th), sc("QTY", th), sc("RATE", th), sc("AMOUNT", th)]); r++;
 
   // Item rows
@@ -453,8 +453,8 @@ async function buildQuotationPDF(props: Props) {
     })(),
 
     headStyles: {
-      fillColor: [31, 78, 121],
-      textColor: [255, 255, 255],
+      fillColor: [200, 200, 200],
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 9.5,
       lineWidth: 0.15,
@@ -487,8 +487,8 @@ async function buildQuotationPDF(props: Props) {
     theme: "grid",
     didParseCell: (data) => {
       if (data.section === "head") {
-        data.cell.styles.fillColor = [31, 78, 121];
-        data.cell.styles.textColor = [255, 255, 255];
+        data.cell.styles.fillColor = [200, 200, 200];
+        data.cell.styles.textColor = [0, 0, 0];
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fontSize = 9.5;
       }
@@ -683,7 +683,7 @@ export async function printSavedQuotation(quotation: SavedQuotation, printWindow
 // Helper: draw footer logos centered at bottom of page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function drawFooterLogos(doc: any, logos: (string | null)[], logoFiles: { file: string; fmt: string; w: number; h: number }[], W: number, ML: number, MR: number) {
-  const footerY = 286;
+  const footerY = 278;
   const gap = 4;
   const totalW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * gap;
   let x = (W - totalW) / 2;
