@@ -472,8 +472,8 @@ async function buildQuotationPDF(props: Props) {
       valign: "middle",
     },
     columnStyles: {
-      0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
-      1: { cellWidth: 14, halign: "center", fontStyle: "bold" },
+      0: { cellWidth: 10, halign: "center", fillColor: [239, 246, 255], textColor: [30, 64, 175] },
+      1: { cellWidth: 14, halign: "center", fillColor: [239, 246, 255], textColor: [30, 64, 175] },
       2: { cellWidth: 16, halign: "center" },
       3: { cellWidth: 64, halign: "left" },
       4: { cellWidth: 28, halign: "center" },
