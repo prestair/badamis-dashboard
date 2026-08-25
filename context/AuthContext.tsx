@@ -145,6 +145,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoggedUser(u.username);
       setLoggedRole(u.role);
       try { sessionStorage.setItem("prestair-session", JSON.stringify({ username: u.username, role: u.role })); } catch { /* */ }
+
+      // Hard refresh on first login of the day to ensure fresh app version
+      try {
+        const todayKey = `prestair-last-refresh-${u.username}`;
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const lastRefresh = localStorage.getItem(todayKey);
+        if (lastRefresh !== today) {
+          localStorage.setItem(todayKey, today);
+          window.location.reload();
+        }
+      } catch { /* ignore if localStorage unavailable */ }
+
       return true;
     }
     return false;
