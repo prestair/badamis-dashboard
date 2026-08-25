@@ -21,7 +21,7 @@ export async function exportTemplate() {
   // ── Title ──
   data.push([sc("PRESTAIR QUOTATION IMPORT TEMPLATE", { font: { bold: true, sz: 14, color: { rgb: "1F4E79" } } }), "", "", "", "", "", "", ""]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
-  data.push([sc("Fill yellow cells. Do NOT change row order or column structure.", noteStyle), "", "", "", "", "", "", ""]);
+  data.push([sc("Fill yellow cells. Do NOT change row order or column structure. SL NO is auto-generated on import — leave it blank.", noteStyle), "", "", "", "", "", "", ""]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
   data.push([]); r++;
 
@@ -70,7 +70,16 @@ export async function exportTemplate() {
     alignment: { horizontal: "center", wrapText: true },
     border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } },
   };
-  data.push(TEMPLATE_HEADERS.map((h) => sc(h, th))); r++;
+  const thNote = {
+    font: { bold: true, color: { rgb: "FFFFFF" }, italic: true },
+    fill: { fgColor: { rgb: "888888" } },
+    alignment: { horizontal: "center", wrapText: true },
+    border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } },
+  };
+  data.push([
+    sc("SL NO\n(auto — leave blank)", thNote),
+    ...TEMPLATE_HEADERS.slice(1).map((h) => sc(h, th)),
+  ]); r++;
 
   // ── Example sections ──
   const secStyle = {
@@ -157,7 +166,7 @@ export async function exportTemplate() {
   merges.push({ s: { r, c: 5 }, e: { r, c: 6 } }); r++;
 
   data.push([]); r++;
-  data.push([sc("NOTE: Yellow cells = fill in. (auto) cells = calculated on import. Do NOT add extra rows above the item table.", noteStyle), "", "", "", "", "", "", ""]);
+  data.push([sc("NOTE: Yellow cells = fill in. (auto) cells = calculated on import. SL NO column chhod do — import par automatically fill hoga. Do NOT add extra rows above the item table.", noteStyle), "", "", "", "", "", "", ""]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
 
   const ws = XLSX.utils.aoa_to_sheet(data);
