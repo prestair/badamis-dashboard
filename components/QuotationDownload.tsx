@@ -359,7 +359,7 @@ async function buildQuotationPDF(props: Props) {
   const ML = 10;
   const MR = 200;
   const CW = MR - ML;
-  const PAGE_BOTTOM = 272;
+  const PAGE_BOTTOM = 255;  // leave space for footer logos (14mm) + margin
   const PAGE_TOP = 12;
 
   // ── Helper: load raster image as a data URL ───────────────────────────────
@@ -495,7 +495,7 @@ async function buildQuotationPDF(props: Props) {
 
   autoTable(doc, {
     startY: y,
-    margin: { left: ML, right: ML },
+    margin: { left: ML, right: ML, bottom: 30 },
     head: [["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
     body: (() => {
       const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
