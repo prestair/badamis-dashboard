@@ -457,6 +457,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     const e: Record<string,string> = {};
     if (!partyName.trim()) e.partyName = "Required";
     if (!date)             e.date      = "Required";
+    if (!requester)        e.requester = "Required";
     return e;
   }
 
@@ -664,89 +665,75 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                 {/* Company branding */}
                 <PrestairBrandHeader />
 
-                <div className="p-6 space-y-5" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") { e.preventDefault(); const form = e.currentTarget; const focusable = Array.from(form.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])')); const idx = focusable.indexOf(document.activeElement as HTMLElement); if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus(); } }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {/* LEFT */}
-                    <div className="space-y-4">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">
-                        Party Details
-                      </p>
+                <div className="p-5 space-y-4" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") { e.preventDefault(); const form = e.currentTarget; const focusable = Array.from(form.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])')); const idx = focusable.indexOf(document.activeElement as HTMLElement); if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus(); } }}>
+
+                  {/* ── Row 1: Party Name | Date + Quotation No ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Party Name *</label>
+                      <div className="mt-1 flex">
+                        <span className="flex items-center rounded-l border border-r-0 border-slate-300 bg-slate-100 px-2 text-xs font-bold text-slate-700">M/S</span>
+                        <input value={partyName}
+                          onChange={(e) => { setPartyName(e.target.value); setStep1Errors((x) => ({...x,partyName:""})); }}
+                          className={inp(step1Errors.partyName) + " rounded-l-none font-semibold"} />
+                      </div>
+                      {step1Errors.partyName && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.partyName}</p>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Party Name *</label>
-                        <div className="mt-1 flex">
-                          <span className="flex items-center rounded-l border border-r-0 border-slate-300 bg-slate-100 px-2 text-xs font-bold text-slate-700">
-                            M/S
-                          </span>
-                          <input value={partyName}
-                            onChange={(e) => { setPartyName(e.target.value); setStep1Errors((x) => ({...x,partyName:""})); }}
-                            className={inp(step1Errors.partyName) + " rounded-l-none font-semibold"} />
-                        </div>
-                        {step1Errors.partyName && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.partyName}</p>}
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Date *</label>
+                        <input type="date" value={date}
+                          onChange={(e) => { setDate(e.target.value); setStep1Errors((x) => ({...x,date:""})); }}
+                          className={inp(step1Errors.date) + " mt-1"} />
+                        {step1Errors.date && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.date}</p>}
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Address</label>
-                        <textarea value={partyAddress}
-                          onChange={(e) => setPartyAddress(e.target.value)}
-                          rows={3} className={inp() + " resize-none mt-1"} />
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                          Quotation No.{canEditQuotationNumber ? "" : " (Admin)"}
+                        </label>
+                        <input value={quotationNo}
+                          onChange={(e) => setQuotationNo(e.target.value)}
+                          readOnly={!canEditQuotationNumber}
+                          title={canEditQuotationNumber ? "Quotation number" : "Only admin can edit"}
+                          className={`${inp()} mt-1 ${!canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`} />
                       </div>
                     </div>
+                  </div>
 
-                    {/* RIGHT */}
-                    <div className="space-y-4">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">
-                        Quotation Details
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Date *</label>
-                          <input type="date" value={date}
-                            onChange={(e) => { setDate(e.target.value); setStep1Errors((x) => ({...x,date:""})); }}
-                            className={inp(step1Errors.date) + " mt-1"} />
-                          {step1Errors.date && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.date}</p>}
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
-                            Quotation No.{canEditQuotationNumber ? "" : " (Admin only)"}
-                          </label>
-                          <input
-                            value={quotationNo}
-                            onChange={(event) => setQuotationNo(event.target.value)}
-                            readOnly={!canEditQuotationNumber}
-                            aria-readonly={!canEditQuotationNumber}
-                            title={canEditQuotationNumber ? "Quotation number" : "Only an admin can change the quotation number"}
-                            className={`${inp()} mt-1 ${!canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
-                          />
-                        </div>
-                      </div>
-                      {/* Requester dropdown */}
+                  {/* ── Row 2: Address | Requester + GST + Kind Attn ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Address</label>
+                      <textarea value={partyAddress} onChange={(e) => setPartyAddress(e.target.value)}
+                        rows={3} className={inp() + " resize-none mt-1"} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Requester</label>
-                        <select
-                          value={requester}
-                          onChange={(e) => setRequester(e.target.value)}
-                          className={inp() + " mt-1"}
-                        >
-                          <option value="">— Select Requester —</option>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Requester *</label>
+                        <select value={requester}
+                          onChange={(e) => { setRequester(e.target.value); setStep1Errors((x) => ({...x, requester: ""})); }}
+                          className={inp(step1Errors.requester) + " mt-1"}>
+                          <option value="">— Select —</option>
                           {requesterOptions.map((r) => (
                             <option key={r.id} value={r.name}>{r.name}</option>
                           ))}
                         </select>
+                        {step1Errors.requester && <p className="text-red-500 text-[10px] mt-0.5">{step1Errors.requester}</p>}
                       </div>
-                      {/* GST No. moved above Kind Attention */}
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">GST No.</label>
                         <input value={partyGST} onChange={(e) => setPartyGST(e.target.value)}
                           className={inp() + " mt-1"} />
                       </div>
-                      <div>
+                      <div className="col-span-2">
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Kind Attention</label>
                         <input value={attention} onChange={(e) => setAttention(e.target.value)}
-                            className={inp() + " mt-1"} />
+                          className={inp() + " mt-1"} />
                       </div>
                     </div>
                   </div>
 
-                  {/* Subject */}
+                  {/* ── Subject ── */}
                   <div>
                     <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Subject</label>
                     <input value={subject} onChange={(e) => setSubject(e.target.value)}
