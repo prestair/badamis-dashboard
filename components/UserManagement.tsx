@@ -31,6 +31,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
   const [changePwdFor, setChangePwdFor] = useState<string | null>(null);
   const [editNameFor, setEditNameFor] = useState<string | null>(null);
   const [newPwd, setNewPwd] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [newName, setNewName] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [form, setForm] = useState({ username: "", fullName: "", password: "", role: "user" as UserRole });
@@ -149,6 +150,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
   function startPasswordEdit(username: string) {
     setChangePwdFor(username);
     setNewPwd("");
+    setShowPwd(false);
     setEditNameFor(null);
     setNewName("");
     setNotice(null);
@@ -312,16 +314,36 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                             {changePwdFor === user.username ? (
                               <div className="flex min-w-[390px] items-center gap-2">
                                 <label htmlFor={`password-${user.username}`} className="sr-only">New password for {user.username}</label>
-                                <input
-                                  id={`password-${user.username}`}
-                                  type="password"
-                                  placeholder="New password (min 6 characters)"
-                                  value={newPwd}
-                                  onChange={(event) => setNewPwd(event.target.value)}
-                                  className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                />
+                                <div className="relative min-w-0 flex-1">
+                                  <input
+                                    id={`password-${user.username}`}
+                                    type={showPwd ? "text" : "password"}
+                                    placeholder="New password (min 6 characters)"
+                                    value={newPwd}
+                                    onChange={(event) => setNewPwd(event.target.value)}
+                                    className="w-full rounded border border-slate-300 px-2 py-1.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPwd((v) => !v)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                                    aria-label={showPwd ? "Hide password" : "Show password"}
+                                    tabIndex={-1}
+                                  >
+                                    {showPwd ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-7s4-7 9-7a9.97 9.97 0 014.93 1.29M15 12a3 3 0 11-4.5-2.6M3 3l18 18" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
                                 <button type="button" onClick={() => handleChangePwd(user.username)} className="rounded bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Save</button>
-                                <button type="button" onClick={() => { setChangePwdFor(null); setNewPwd(""); }} className="rounded bg-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-300">Cancel</button>
+                                <button type="button" onClick={() => { setChangePwdFor(null); setNewPwd(""); setShowPwd(false); }} className="rounded bg-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-300">Cancel</button>
                               </div>
                             ) : (
                               <div className="flex min-w-[360px] flex-wrap items-center gap-2">
