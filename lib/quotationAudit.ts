@@ -24,6 +24,11 @@ export type QuotationDiscounts = {
   legacyAmount: number;
   transportationAmount: number;
   packingAmount: number;
+  // Part A/B support (v4)
+  discountPercentA?: number;       // e.g. 11 means 11% on Part A gross
+  partBEnabled?: boolean;
+  discountPercentB?: number;       // e.g. 7 means 7% on Part B gross
+  gstEnabled?: boolean;            // default true; false hides GST row
 };
 
 type AuditRow = QuotationAudit & {
@@ -32,12 +37,21 @@ type AuditRow = QuotationAudit & {
 
 type DiscountRow = {
   __quotationDiscounts: true;
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   seasonal: { enabled: boolean; amount: number };
   special: { enabled: boolean; amount: number };
   legacyAmount?: number;
   transportationAmount?: number;
   packingAmount?: number;
+  discountPercentA?: number;
+  partBEnabled?: boolean;
+  discountPercentB?: number;
+  gstEnabled?: boolean;
+};
+
+type PartBRow = {
+  __partBRows: true;
+  items: unknown[];
 };
 
 export const EMPTY_QUOTATION_DISCOUNTS: QuotationDiscounts = {
@@ -46,6 +60,9 @@ export const EMPTY_QUOTATION_DISCOUNTS: QuotationDiscounts = {
   legacyAmount: 0,
   transportationAmount: 0,
   packingAmount: 0,
+  discountPercentA: 0,
+  partBEnabled: false,
+  discountPercentB: 0,
 };
 
 const UNKNOWN_USER = "Unknown";
@@ -68,6 +85,11 @@ function isDiscountRow(value: unknown): value is DiscountRow {
     (value as Record<string, unknown>).__quotationDiscounts === true;
 }
 
+function isPartBRow(value: unknown): value is PartBRow {
+  return !!value && typeof value === "object" &&
+    (value as Record<string, unknown>).__partBRows === true;
+}
+
 function cleanDiscountPart(value: unknown): { enabled: boolean; amount: number } {
   const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
   return {
@@ -84,18 +106,26 @@ function cleanDiscounts(value: unknown): QuotationDiscounts {
     legacyAmount: Math.max(0, Number(raw.legacyAmount) || 0),
     transportationAmount: Math.max(0, Number(raw.transportationAmount) || 0),
     packingAmount: Math.max(0, Number(raw.packingAmount) || 0),
+    discountPercentA: Math.max(0, Number(raw.discountPercentA) || 0),
+    partBEnabled: raw.partBEnabled === true,
+    discountPercentB: Math.max(0, Number(raw.discountPercentB) || 0),
+    gstEnabled: raw.gstEnabled === false ? false : true, // default true
   };
 }
 
 function toDiscountRow(discounts: QuotationDiscounts): DiscountRow {
   return {
     __quotationDiscounts: true,
-    version: 3,
+    version: 4,
     seasonal: cleanDiscountPart(discounts.seasonal),
     special: cleanDiscountPart(discounts.special),
     legacyAmount: Math.max(0, Number(discounts.legacyAmount) || 0),
     transportationAmount: Math.max(0, Number(discounts.transportationAmount) || 0),
     packingAmount: Math.max(0, Number(discounts.packingAmount) || 0),
+    discountPercentA: Math.max(0, Number(discounts.discountPercentA) || 0),
+    partBEnabled: discounts.partBEnabled === true,
+    discountPercentB: Math.max(0, Number(discounts.discountPercentB) || 0),
+    gstEnabled: discounts.gstEnabled === false ? false : true,
   };
 }
 
@@ -127,6 +157,7 @@ function cleanHistory(value: unknown): QuotationEditEntry[] {
 
 export function unpackQuotationRows(value: unknown): {
   items: unknown[];
+  partBItems: unknown[];
   audit: QuotationAudit;
   hasAudit: boolean;
   discounts: QuotationDiscounts;
@@ -135,11 +166,13 @@ export function unpackQuotationRows(value: unknown): {
   const rows = Array.isArray(value) ? value : [];
   const auditRow = rows.find(isAuditRow);
   const discountRow = rows.find(isDiscountRow);
+  const partBRow = rows.find(isPartBRow);
   const editHistory = cleanHistory(auditRow?.editHistory);
   const editCount = Math.max(Number(auditRow?.editCount) || 0, editHistory.length);
 
   return {
-    items: rows.filter((row) => !isAuditRow(row) && !isDiscountRow(row)),
+    items: rows.filter((row) => !isAuditRow(row) && !isDiscountRow(row) && !isPartBRow(row)),
+    partBItems: Array.isArray(partBRow?.items) ? partBRow.items : [],
     hasAudit: !!auditRow,
     discounts: cleanDiscounts(discountRow),
     hasDiscounts: !!discountRow,
@@ -153,16 +186,21 @@ export function unpackQuotationRows(value: unknown): {
   };
 }
 
-export function withQuotationDiscounts(items: unknown, discounts: QuotationDiscounts): unknown[] {
+export function withQuotationDiscounts(items: unknown, discounts: QuotationDiscounts, partBItems?: unknown[]): unknown[] {
   const unpacked = unpackQuotationRows(items);
-  return [...unpacked.items, toDiscountRow(discounts)];
+  const result: unknown[] = [...unpacked.items, toDiscountRow(discounts)];
+  if (partBItems && partBItems.length > 0) {
+    result.push({ __partBRows: true, items: partBItems });
+  }
+  return result;
 }
 
 function packQuotationRows(items: unknown, audit: QuotationAudit): unknown[] {
   const unpacked = unpackQuotationRows(items);
   const auditRow: AuditRow = { __quotationAudit: true, ...audit };
   const discountRows = unpacked.hasDiscounts ? [toDiscountRow(unpacked.discounts)] : [];
-  return [...unpacked.items, ...discountRows, auditRow];
+  const partBRows = unpacked.partBItems.length > 0 ? [{ __partBRows: true, items: unpacked.partBItems }] : [];
+  return [...unpacked.items, ...discountRows, ...partBRows, auditRow];
 }
 
 export function createAuditedRows(

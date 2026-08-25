@@ -79,6 +79,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loggedUser, setLoggedUser] = useState("");
   const [loggedRole, setLoggedRole] = useState<UserRole | null>(null);
 
+  // Restore login session from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const session = sessionStorage.getItem("prestair-session");
+      if (session) {
+        const { username, role } = JSON.parse(session);
+        if (username) {
+          setIsLoggedIn(true);
+          setLoggedUser(username);
+          setLoggedRole(role ?? null);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // Load users from API on mount, fall back to localStorage
   useEffect(() => {
     const cached = loadPersistedUsers();
@@ -128,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoggedIn(true);
       setLoggedUser(u.username);
       setLoggedRole(u.role);
+      try { sessionStorage.setItem("prestair-session", JSON.stringify({ username: u.username, role: u.role })); } catch { /* */ }
       return true;
     }
     return false;
@@ -138,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoggedIn(false);
     setLoggedUser("");
     setLoggedRole(null);
+    try { sessionStorage.removeItem("prestair-session"); } catch { /* */ }
   }
 
   // ── Change own password ────────────────────────────────────────────────────

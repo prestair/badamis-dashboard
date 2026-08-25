@@ -52,6 +52,8 @@ export type SavedQuotation = {
   editedBy:     string;
   editCount:    number;
   editHistory:  QuotationEditEntry[];
+  // Part B support
+  partBRows?:   SavedRowState[];
 };
 
 type QuotationInput = Omit<
@@ -113,7 +115,7 @@ function normalizeSavedRows(items: unknown[]): SavedRowState[] {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(r: any): SavedQuotation {
-  const { items, audit, discounts, hasDiscounts } = unpackQuotationRows(r.rows);
+  const { items, partBItems, audit, discounts, hasDiscounts } = unpackQuotationRows(r.rows);
   const storedDiscount = Math.max(0, Number(r.discount) || 0);
   return {
     dbId:         r.id,
@@ -137,6 +139,9 @@ function mapRow(r: any): SavedQuotation {
       ),
       transportationAmount: 0,
       packingAmount: 0,
+      discountPercentA: 0,
+      partBEnabled: false,
+      discountPercentB: 0,
     },
     afterDiscount:Number(r.after_discount)|| 0,
     gst:          Number(r.gst)           || 0,
@@ -147,6 +152,7 @@ function mapRow(r: any): SavedQuotation {
     editedBy:     audit.editedBy,
     editCount:    audit.editCount,
     editHistory:  audit.editHistory,
+    partBRows:    partBItems.length > 0 ? normalizeSavedRows(partBItems) : undefined,
   };
 }
 
@@ -169,7 +175,7 @@ function toPayload(
     partyGST:      q.partyGST,
     subject:       q.subject,
     attention:     q.attention,
-    rows:          withQuotationDiscounts(q.rows, q.discounts),
+    rows:          withQuotationDiscounts(q.rows, q.discounts, q.partBRows),
     gross:         q.gross,
     discount:      q.discount,
     afterDiscount: q.afterDiscount,

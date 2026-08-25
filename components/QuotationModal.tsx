@@ -172,10 +172,49 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   const [packingCharges, setPackingCharges] = useState(
     initialData?.discounts.packingAmount ? String(initialData.discounts.packingAmount) : ""
   );
+  // Part A/B state
+  const [discountPercentA, setDiscountPercentA] = useState(
+    initialData?.discounts.discountPercentA ? String(initialData.discounts.discountPercentA) : ""
+  );
+  const [partBEnabled, setPartBEnabled] = useState(initialData?.discounts.partBEnabled ?? false);
+  const [discountPercentB, setDiscountPercentB] = useState(
+    initialData?.discounts.discountPercentB ? String(initialData.discounts.discountPercentB) : ""
+  );
+  // GST toggle — default true (backward compat)
+  const [gstEnabled, setGstEnabled] = useState(initialData?.discounts.gstEnabled !== false);
+  // Discount % toggles
+  const [discountAEnabled, setDiscountAEnabled] = useState(
+    (initialData?.discounts.discountPercentA ?? 0) > 0
+  );
+  const [discountBEnabled, setDiscountBEnabled] = useState(
+    (initialData?.discounts.discountPercentB ?? 0) > 0
+  );
   const [step1Errors, setStep1Errors] = useState<Record<string,string>>({});
 
   // ── Step 2: Item rows ──────────────────────────────────────────────────────
   const [itemRows, setItemRows] = useState<ItemRow[]>(() => initItemRows(initialData));
+  const [partBItemRows, setPartBItemRows] = useState<ItemRow[]>(() => {
+    if (!initialData?.partBRows || initialData.partBRows.length === 0) {
+      return [blankSection("PART B - SECTION 1"), blankRow(1)];
+    }
+    let itemNumber = 0;
+    return initialData.partBRows.map((row) => {
+      if (row.rowType === "section") {
+        return {
+          uid: newUid(), rowType: "section" as const, sectionId: row.id,
+          slNo: "", itemCode: "", desc: row.desc || row.section,
+          size: "", hsn: "", qty: "", additionalColumn: "", rate: "",
+        };
+      }
+      return {
+        uid: newUid(), rowType: "item" as const, sectionId: "",
+        slNo: String(++itemNumber), itemCode: row.id, desc: row.desc,
+        size: row.size, hsn: row.hsn, qty: String(row.qty),
+        additionalColumn: row.additionalColumn,
+        rate: row.rate !== null ? String(row.rate) : "",
+      };
+    });
+  });
   const [itemNameOptions, setItemNameOptions] = useState<QuotationItemName[]>([]);
   const [itemNameLoadError, setItemNameLoadError] = useState("");
   const [saved,       setSaved]       = useState(false);
@@ -260,6 +299,60 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
   const itemCount = itemRows.filter((row) => row.rowType === "item").length;
 
+  // ── Part B Row helpers ─────────────────────────────────────────────────────
+  function updatePartBRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
+    setPartBItemRows((prev) =>
+      prev.map((r) => (r.uid === uid ? { ...r, [field]: value } : r))
+    );
+    setSaved(false);
+  }
+
+  function addPartBRow() {
+    setPartBItemRows((prev) => {
+      const itemCount = prev.filter((row) => row.rowType === "item").length;
+      return [...prev, blankRow(itemCount + 1)];
+    });
+    setSaved(false);
+  }
+
+  function addPartBSection() {
+    setPartBItemRows((prev) => {
+      const sectionCount = prev.filter((row) => row.rowType === "section").length;
+      return [...prev, blankSection(`PART B - SECTION ${sectionCount + 1}`)];
+    });
+    setSaved(false);
+  }
+
+  function deletePartBRow(uid: string) {
+    setPartBItemRows((prev) => renumberItemRows(prev.filter((r) => r.uid !== uid)));
+    setSaved(false);
+  }
+
+  function movePartBRow(uid: string, direction: "up" | "down") {
+    setPartBItemRows((prev) => {
+      const idx = prev.findIndex((r) => r.uid === uid);
+      if (idx === -1) return prev;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return renumberItemRows(next);
+    });
+    setSaved(false);
+  }
+
+  function insertPartBRowAfter(idx: number) {
+    setPartBItemRows((prev) => {
+      const next = [...prev];
+      const itemCount = next.filter((r) => r.rowType === "item").length;
+      next.splice(idx + 1, 0, blankRow(itemCount + 1));
+      return renumberItemRows(next);
+    });
+    setSaved(false);
+  }
+
+  const partBItemCount = partBItemRows.filter((row) => row.rowType === "item").length;
+
   // ── Per-row gross amount = qty × rate ─────────────────────────────────────
   function rowAmt(row: ItemRow): number | null {
     if (row.rowType === "section") return null;
@@ -271,34 +364,60 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
   // ── Live totals ────────────────────────────────────────────────────────────
   const {
-    gross,
-    seasonalAmount,
+    grossA,
+    discountAmountA,
     specialAmount,
-    totalDiscount,
-    afterDiscount,
+    seasonalAmount,
+    totalDiscountA,
+    afterDiscountA,
+    grossB,
+    discountAmountB,
+    afterDiscountB,
+    combinedAfterDiscount,
     transportationAmount,
     packingAmount,
     taxableAmount,
     gst,
     grandTotal,
+    // Backward-compatible aliases used by existing UI/download
+    gross,
+    afterDiscount,
   } = useMemo(() => {
-    const gross = itemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0);
-    const seasonalAmount = seasonalEnabled ? Math.max(0, Number(seasonalDiscount) || 0) : 0;
+    // Part A
+    const grossA = itemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0);
+    const pctA = discountAEnabled ? Math.max(0, Number(discountPercentA) || 0) : 0;
+    const discountAmountA = Math.round(grossA * pctA / 100);
     const specialAmount = specialEnabled ? Math.max(0, Number(specialDiscount) || 0) : 0;
-    const totalDiscount = seasonalAmount + specialAmount;
-    const afterDiscount = Math.max(0, gross - totalDiscount);
+    const seasonalAmount = seasonalEnabled ? Math.max(0, Number(seasonalDiscount) || 0) : 0;
+    const totalDiscountA = discountAmountA + specialAmount + seasonalAmount;
+    const afterDiscountA = Math.max(0, grossA - totalDiscountA);
+
+    // Part B
+    const grossB = partBEnabled ? partBItemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0) : 0;
+    const pctB = discountBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0;
+    const discountAmountB = Math.round(grossB * pctB / 100);
+    const afterDiscountB = Math.max(0, grossB - discountAmountB);
+
+    // Combined
+    const combinedAfterDiscount = afterDiscountA + (partBEnabled ? afterDiscountB : 0);
     const transportationAmount = Math.max(0, Number(transportationCharges) || 0);
     const packingAmount = Math.max(0, Number(packingCharges) || 0);
-    const taxableAmount = afterDiscount + transportationAmount + packingAmount;
+    const taxableAmount = combinedAfterDiscount + transportationAmount + packingAmount;
     const gst = Math.round(taxableAmount * 0.18);
     const grandTotal = taxableAmount + gst;
+
     return {
-      gross, seasonalAmount, specialAmount, totalDiscount, afterDiscount,
-      transportationAmount, packingAmount, taxableAmount, gst, grandTotal,
+      grossA, discountAmountA, specialAmount, seasonalAmount, totalDiscountA, afterDiscountA,
+      grossB, discountAmountB, afterDiscountB,
+      combinedAfterDiscount, transportationAmount, packingAmount, taxableAmount, gst, grandTotal,
+      // Backward-compat: gross = A gross, afterDiscount = combinedAfterDiscount
+      gross: grossA,
+      afterDiscount: combinedAfterDiscount,
     };
   }, [
-    itemRows, seasonalEnabled, seasonalDiscount, specialEnabled, specialDiscount,
-    transportationCharges, packingCharges,
+    itemRows, partBItemRows, partBEnabled,
+    discountAEnabled, discountPercentA, seasonalEnabled, seasonalDiscount, specialEnabled, specialDiscount,
+    discountBEnabled, discountPercentB, transportationCharges, packingCharges,
   ]);
 
   const fmt = (n: number) => n.toLocaleString("en-IN");
@@ -348,17 +467,39 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
     });
 
+    const savedPartBRows: SavedRowState[] = partBItemRows.map((r) => {
+      if (r.rowType === "section") {
+        const heading = r.desc.trim() || "Untitled Section";
+        return {
+          id: r.sectionId, rowType: "section", desc: heading, size: "", hsn: "",
+          section: heading, qty: 0, additionalColumn: "", discount: 0,
+          discountIsPerUnit: true, rate: null, amt: null, checked: true,
+        };
+      }
+      const rate = r.rate === "" ? null : Number(r.rate);
+      const qty  = Number(r.qty) || 0;
+      const amt  = rowAmt(r);
+      return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
+               section: "Custom", qty, additionalColumn: r.additionalColumn,
+               discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
+    });
+
     const payload = {
       quotationNo, date, partyName, partyAddress, partyGST, subject, attention,
-      rows: savedRows, gross, discount: totalDiscount,
+      rows: savedRows, gross: grossA, discount: totalDiscountA,
       discounts: {
         seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
         special: { enabled: specialEnabled, amount: specialAmount },
         legacyAmount: 0,
         transportationAmount,
         packingAmount,
+        discountPercentA: Math.max(0, Number(discountPercentA) || 0),
+        partBEnabled,
+        discountPercentB: partBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0,
+        gstEnabled,
       },
-      afterDiscount, gst, grandTotal,
+      afterDiscount: combinedAfterDiscount, gst, grandTotal,
+      partBRows: partBEnabled ? savedPartBRows : undefined,
     };
 
     try {
@@ -437,17 +578,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   amt: rowAmt(r),
                   section: r.rowType === "section" ? r.desc : undefined,
                 }))}
-                gross={gross}
+                gross={grossA}
                 discounts={{
                   seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
                   special: { enabled: specialEnabled, amount: specialAmount },
                   legacyAmount: 0,
                   transportationAmount,
                   packingAmount,
+                  discountPercentA: Math.max(0, Number(discountPercentA) || 0),
+                  partBEnabled,
+                  discountPercentB: partBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0,
                 }}
-                afterDiscount={afterDiscount}
+                afterDiscount={combinedAfterDiscount}
                 gst={gst}
                 grandTotal={grandTotal}
+                partBRows={partBEnabled ? partBItemRows.map((r) => ({
+                  rowType: r.rowType, slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  size: r.size, hsn: r.hsn, qty: r.qty,
+                  additionalColumn: r.additionalColumn, rate: r.rate,
+                  amt: rowAmt(r),
+                  section: r.rowType === "section" ? r.desc : undefined,
+                })) : undefined}
+                grossB={partBEnabled ? grossB : undefined}
+                afterDiscountB={partBEnabled ? afterDiscountB : undefined}
               />
             )}
             {step === 1 ? (
@@ -481,7 +634,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                 {/* Company branding */}
                 <PrestairBrandHeader />
 
-                <div className="p-6 space-y-5">
+                <div className="p-6 space-y-5" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") { e.preventDefault(); const form = e.currentTarget; const focusable = Array.from(form.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])')); const idx = focusable.indexOf(document.activeElement as HTMLElement); if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus(); } }}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {/* LEFT */}
                     <div className="space-y-4">
@@ -556,41 +709,73 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   </div>
 
                   {/* Optional total-level discounts */}
-                  <div>
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Optional Discounts
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                  {/* ── Discount & Part B Configuration ── */}
+                  {/* ── Discounts & Configuration (compact grid) ── */}
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Discounts & Configuration
+                    </div>
+
+                    {/* Row grid */}
+                    <div className="divide-y divide-slate-100">
+
+                      {/* Discount % Part A — toggle + input inline */}
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <span className="text-xs text-slate-600 font-medium">Discount % <span className="text-slate-400">(Part A)</span></span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                            <button type="button" onClick={() => setDiscountAEnabled(true)} aria-pressed={discountAEnabled}
+                              className={`px-2.5 py-1 transition-colors ${discountAEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => { setDiscountAEnabled(false); setDiscountPercentA(""); }} aria-pressed={!discountAEnabled}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!discountAEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                          </div>
+                          {discountAEnabled && (
+                            <input type="number" min="0" max="100" step="0.01" value={discountPercentA}
+                              onChange={(e) => setDiscountPercentA(e.target.value)} placeholder="0"
+                              className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Special Discount, Seasonal Discount, Part B, GST Required */}
                       {([
-                        ["Seasonal Discount", seasonalEnabled, setSeasonalEnabled],
-                        ["Special Discount", specialEnabled, setSpecialEnabled],
-                      ] as const).map(([label, enabled, setEnabled]) => (
-                        <div key={label} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{label}</span>
-                          <div className="flex overflow-hidden rounded-lg border border-slate-300" role="group" aria-label={`${label} enabled`}>
-                            <button
-                              type="button"
-                              onClick={() => setEnabled(true)}
-                              aria-pressed={enabled}
-                              className={`px-3 py-1.5 text-xs font-bold transition-colors ${enabled ? "bg-green-600 text-white" : "bg-white text-slate-500 hover:bg-slate-100"}`}
-                            >
-                              YES
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEnabled(false)}
-                              aria-pressed={!enabled}
-                              className={`px-3 py-1.5 text-xs font-bold transition-colors ${!enabled ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-100"}`}
-                            >
-                              NO
-                            </button>
+                        ["Special Discount", specialEnabled, setSpecialEnabled] as const,
+                        ["Seasonal Discount", seasonalEnabled, setSeasonalEnabled] as const,
+                        ["Part B", partBEnabled, setPartBEnabled] as const,
+                        ["GST Required", gstEnabled, setGstEnabled] as const,
+                      ]).map(([label, enabled, setEnabled]) => (
+                        <div key={label} className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">{label}</span>
+                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                            <button type="button" onClick={() => (setEnabled as (v: boolean) => void)(true)} aria-pressed={enabled as boolean}
+                              className={`px-2.5 py-1 transition-colors ${(enabled as boolean) ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => (setEnabled as (v: boolean) => void)(false)} aria-pressed={!(enabled as boolean)}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!(enabled as boolean) ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
                           </div>
                         </div>
                       ))}
+
+                      {/* Discount % Part B — only when Part B enabled */}
+                      {partBEnabled && (
+                        <div className="flex items-center justify-between bg-indigo-50/40 px-3 py-2">
+                          <span className="text-xs text-indigo-600 font-medium">Discount % <span className="text-indigo-400">(Part B)</span></span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex rounded-md overflow-hidden border border-indigo-200 text-[10px] font-bold">
+                              <button type="button" onClick={() => setDiscountBEnabled(true)} aria-pressed={discountBEnabled}
+                                className={`px-2.5 py-1 transition-colors ${discountBEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                              <button type="button" onClick={() => { setDiscountBEnabled(false); setDiscountPercentB(""); }} aria-pressed={!discountBEnabled}
+                                className={`px-2.5 py-1 transition-colors border-l border-indigo-200 ${!discountBEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                            </div>
+                            {discountBEnabled && (
+                              <input type="number" min="0" max="100" step="0.01" value={discountPercentB}
+                                onChange={(e) => setDiscountPercentB(e.target.value)} placeholder="0"
+                                className="w-16 rounded border border-indigo-200 bg-white px-2 py-1 text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400">
-                      Enabled discount amounts can be entered after Total Amount on the item page.
-                    </p>
                   </div>
 
                   <button onClick={goToStep2}
@@ -630,6 +815,11 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                     Item Name autofill is unavailable: {itemNameLoadError}
                   </p>
                 )}
+
+                {/* ── PART A Label ── */}
+                <div className="bg-blue-700 text-white text-center py-1.5 px-4 text-xs font-bold uppercase tracking-wider">
+                  PART - A
+                </div>
 
                 {/* ── Items Table ── */}
                 <div className="max-h-[52vh] overflow-auto">
@@ -817,28 +1007,165 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   </span>
                 </div>
 
+                {/* ── PART B ── */}
+                {partBEnabled && (
+                  <>
+                    <div className="bg-indigo-700 text-white text-center py-1.5 px-4 text-xs font-bold uppercase tracking-wider mt-1">
+                      PART - B
+                    </div>
+
+                    <div className="max-h-[52vh] overflow-auto">
+                      <table className="w-full border-collapse" style={{ fontSize:"11px" }}>
+                        <thead className="sticky top-0 z-20 bg-indigo-700 shadow-sm">
+                          <tr className="bg-indigo-700 text-white">
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:42}}>SL NO</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-left" style={{width:90}}>ITEM CODE</th>
+                            <th className="border border-indigo-600 px-3 py-2.5 text-left">ITEM NAME</th>
+                            <th className="border border-indigo-600 px-3 py-2.5 text-left" style={{width:220, minWidth:220}}>ADDITIONAL DESCRIPTION</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-right" style={{width:100}}>RATE (₹)</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-right" style={{width:110}}>AMOUNT (₹)</th>
+                            <th className="border border-indigo-600 px-1 py-2.5 text-center" style={{width:44}}>↕</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:30}}>🗑</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {partBItemRows.map((row, idx) => {
+                            const amt = rowAmt(row);
+                            if (row.rowType === "section") {
+                              return (
+                                <tr key={row.uid} className="group bg-indigo-50">
+                                  <td colSpan={9} className="border border-indigo-200 px-3 py-2">
+                                    <div className="flex items-center gap-3">
+                                      <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-indigo-700">Section</span>
+                                      <input
+                                        value={row.desc}
+                                        onChange={(event) => updatePartBRow(row.uid, "desc", event.target.value)}
+                                        placeholder="Enter section heading"
+                                        className="w-full rounded border border-indigo-200 bg-white px-3 py-1.5 text-sm font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="border border-indigo-200 px-1 py-1 text-center">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <button type="button" onClick={() => movePartBRow(row.uid, "up")} disabled={idx === 0}
+                                        className="text-slate-400 hover:text-indigo-600 disabled:opacity-20 disabled:cursor-not-allowed text-sm leading-none" title="Move up">▲</button>
+                                      <button type="button" onClick={() => movePartBRow(row.uid, "down")} disabled={idx === partBItemRows.length - 1}
+                                        className="text-slate-400 hover:text-indigo-600 disabled:opacity-20 disabled:cursor-not-allowed text-sm leading-none" title="Move down">▼</button>
+                                    </div>
+                                  </td>
+                                  <td className="border border-indigo-200 px-1 py-1 text-center">
+                                    <button type="button" onClick={() => deletePartBRow(row.uid)}
+                                      className="text-slate-400 transition-colors hover:text-red-600" title="Remove section">×</button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            return (
+                              <tr key={row.uid} className="group hover:bg-indigo-50 transition-colors" style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                                <td className="border border-slate-100 px-1 py-1 text-center font-bold text-black">{row.slNo}</td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.itemCode} onChange={(e) => updatePartBRow(row.uid,"itemCode",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-mono text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.desc} list="quotation-item-name-options" autoComplete="off"
+                                    onChange={(e) => updatePartBRow(row.uid,"desc",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1" style={{minWidth:220}}>
+                                  <input value={row.additionalColumn} onChange={(e) => updatePartBRow(row.uid,"additionalColumn",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.size} onChange={(e) => updatePartBRow(row.uid,"size",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.hsn} onChange={(e) => updatePartBRow(row.uid,"hsn",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-mono text-center text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input type="number" min={0} value={row.qty} onChange={(e) => updatePartBRow(row.uid,"qty",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-semibold text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input type="number" min={0} value={row.rate} onChange={(e) => updatePartBRow(row.uid,"rate",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-mono text-black" />
+                                </td>
+                                <td className="border border-slate-100 px-2 py-1.5 text-right font-mono font-bold text-black">
+                                  {amt !== null ? <span>{fmt(amt)}</span> : <span className="font-normal">—</span>}
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1 text-center">
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <button type="button" onClick={() => movePartBRow(row.uid, "up")} disabled={idx === 0}
+                                      className="text-slate-400 hover:text-indigo-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs leading-none">▲</button>
+                                    <button type="button" onClick={() => movePartBRow(row.uid, "down")} disabled={idx === partBItemRows.length - 1}
+                                      className="text-slate-400 hover:text-indigo-600 disabled:opacity-20 disabled:cursor-not-allowed text-xs leading-none">▼</button>
+                                  </div>
+                                </td>
+                                <td className="border border-slate-100 px-1 py-1 text-center">
+                                  <button onClick={() => deletePartBRow(row.uid)}
+                                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all text-sm leading-none">✕</button>
+                                </td>
+                              </tr>
+                            );
+                          }).reduce<React.ReactNode[]>((acc, rowEl, idx) => {
+                            acc.push(rowEl);
+                            const row = partBItemRows[idx];
+                            const nextRow = partBItemRows[idx + 1];
+                            if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
+                              acc.push(
+                                <tr key={`insert-b-after-${row.uid}`} className="bg-slate-50/50">
+                                  <td colSpan={11} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                                    <button type="button" onClick={() => insertPartBRowAfter(idx)}
+                                      className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 px-3 py-0.5 rounded transition-colors">
+                                      + Add Row
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            return acc;
+                          }, [])}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Part B Add buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-indigo-100 bg-indigo-50/50 px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button onClick={addPartBRow}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-indigo-300 text-indigo-600 hover:border-indigo-500 hover:bg-indigo-50 text-xs font-bold transition-all active:scale-95">
+                          <span className="text-base leading-none">+</span>
+                          Add More Item (B)
+                        </button>
+                        <button onClick={addPartBSection}
+                          className="flex items-center gap-2 rounded-lg border-2 border-dashed border-violet-300 px-4 py-2 text-xs font-bold text-violet-700 transition-all hover:border-violet-500 hover:bg-violet-50 active:scale-95">
+                          <span className="text-base leading-none">+</span>
+                          Add Section (B)
+                        </button>
+                      </div>
+                      <span className="text-xs text-indigo-500 font-semibold">
+                        Part B: {partBItemCount} item{partBItemCount !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </>
+                )}
+
                 {/* ── Totals ── */}
                 <div className="border-t-2 border-slate-300">
+                  {/* Part A Totals */}
                   <div className="flex items-center justify-between border-b border-slate-200 bg-yellow-50 px-6 py-2 font-bold text-yellow-900">
-                    <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT</span>
-                    <span className="font-mono font-bold">₹ {fmt(gross)}</span>
+                    <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT{partBEnabled ? " (A)" : ""}</span>
+                    <span className="font-mono font-bold">₹ {fmt(grossA)}</span>
                   </div>
-                  {seasonalEnabled && (
-                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
-                      <label htmlFor="seasonal-discount-amount" className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</label>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold">₹</span>
-                        <input
-                          id="seasonal-discount-amount"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={seasonalDiscount}
-                          onChange={(event) => setSeasonalDiscount(event.target.value)}
-                          placeholder="Enter amount"
-                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                        />
-                      </div>
+                  {Number(discountPercentA) > 0 && (
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
+                      <span className="text-xs font-semibold tracking-wide">DISCOUNT {discountPercentA}%</span>
+                      <span className="font-mono font-bold">₹ {fmt(discountAmountA)}</span>
                     </div>
                   )}
                   {specialEnabled && (
@@ -859,12 +1186,56 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       </div>
                     </div>
                   )}
-                  {(seasonalEnabled || specialEnabled) && (
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
-                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
-                      <span className="font-mono font-bold">₹ {fmt(afterDiscount)}</span>
+                  {seasonalEnabled && (
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
+                      <label htmlFor="seasonal-discount-amount" className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</label>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">₹</span>
+                        <input
+                          id="seasonal-discount-amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={seasonalDiscount}
+                          onChange={(event) => setSeasonalDiscount(event.target.value)}
+                          placeholder="Enter amount"
+                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        />
+                      </div>
                     </div>
                   )}
+                  {(Number(discountPercentA) > 0 || specialEnabled || seasonalEnabled) && (
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
+                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT{partBEnabled ? " (A)" : ""}</span>
+                      <span className="font-mono font-bold">₹ {fmt(afterDiscountA)}</span>
+                    </div>
+                  )}
+
+                  {/* Part B Totals — only when enabled */}
+                  {partBEnabled && (
+                    <>
+                      <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-50 px-6 py-2 font-bold text-indigo-900 mt-0.5">
+                        <span className="text-xs font-semibold tracking-wide">TOTAL (B)</span>
+                        <span className="font-mono font-bold">₹ {fmt(grossB)}</span>
+                      </div>
+                      {Number(discountPercentB) > 0 && (
+                        <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-50/70 px-6 py-2 text-indigo-800">
+                          <span className="text-xs font-semibold tracking-wide">DISCOUNT {discountPercentB}%</span>
+                          <span className="font-mono font-bold">₹ {fmt(discountAmountB)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-100 px-6 py-2 font-bold text-indigo-900">
+                        <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT (B)</span>
+                        <span className="font-mono font-bold">₹ {fmt(afterDiscountB)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-slate-300 bg-slate-100 px-6 py-2 font-bold text-slate-900 mt-0.5">
+                        <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT (A+B)</span>
+                        <span className="font-mono font-bold">₹ {fmt(combinedAfterDiscount)}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Combined: Transportation, Packing, GST, Grand Total */}
                   <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
                     <label htmlFor="transportation-charges" className="text-xs font-semibold tracking-wide">TRANSPORTATION CHARGES</label>
                     <div className="flex items-center gap-2">
@@ -898,17 +1269,21 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-100 px-6 py-2 font-bold text-cyan-950">
-                    <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE BEFORE GST</span>
+                    <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE</span>
                     <span className="font-mono font-bold">₹ {fmt(taxableAmount)}</span>
                   </div>
-                  <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
-                    <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
-                    <span className="font-mono font-bold">₹ {fmt(gst)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
-                    <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
-                    <span className="font-mono font-bold">₹ {fmt(grandTotal)}</span>
-                  </div>
+                  {gstEnabled && (
+                    <>
+                      <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
+                        <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
+                        <span className="font-mono font-bold">₹ {fmt(gst)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
+                        <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
+                        <span className="font-mono font-bold">₹ {fmt(grandTotal)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
               </div>
@@ -945,17 +1320,29 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   amt: rowAmt(r),
                   section: r.rowType === "section" ? r.desc : undefined,
                 }))}
-                gross={gross}
+                gross={grossA}
                 discounts={{
                   seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
                   special: { enabled: specialEnabled, amount: specialAmount },
                   legacyAmount: 0,
                   transportationAmount,
                   packingAmount,
+                  discountPercentA: Math.max(0, Number(discountPercentA) || 0),
+                  partBEnabled,
+                  discountPercentB: partBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0,
                 }}
-                afterDiscount={afterDiscount}
+                afterDiscount={combinedAfterDiscount}
                 gst={gst}
                 grandTotal={grandTotal}
+                partBRows={partBEnabled ? partBItemRows.map((r) => ({
+                  rowType: r.rowType, slNo: r.slNo, itemCode: r.itemCode, desc: r.desc,
+                  size: r.size, hsn: r.hsn, qty: r.qty,
+                  additionalColumn: r.additionalColumn, rate: r.rate,
+                  amt: rowAmt(r),
+                  section: r.rowType === "section" ? r.desc : undefined,
+                })) : undefined}
+                grossB={partBEnabled ? grossB : undefined}
+                afterDiscountB={partBEnabled ? afterDiscountB : undefined}
               />
             )}
             <button onClick={onClose}

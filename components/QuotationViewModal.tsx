@@ -122,6 +122,25 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
               afterDiscount={q.afterDiscount}
               gst={q.gst}
               grandTotal={q.grandTotal}
+              partBRows={q.partBRows?.map((row, index) => ({
+                rowType: row.rowType,
+                slNo: row.rowType === "section" ? "" : String((q.partBRows ?? []).slice(0, index + 1).filter((entry) => entry.rowType !== "section").length),
+                itemCode: row.id,
+                desc: row.desc,
+                size: row.size,
+                hsn: row.hsn,
+                qty: String(row.qty),
+                additionalColumn: row.additionalColumn,
+                rate: row.rate === null ? "" : String(row.rate),
+                amt: row.amt,
+                section: row.section,
+              }))}
+              grossB={q.partBRows?.reduce((sum, row) => sum + (row.amt ?? 0), 0)}
+              afterDiscountB={(() => {
+                const gB = q.partBRows?.reduce((sum, row) => sum + (row.amt ?? 0), 0) ?? 0;
+                const pctB = q.discounts.discountPercentB ?? 0;
+                return Math.max(0, gB - Math.round(gB * pctB / 100));
+              })()}
             />
             {/* Edit */}
             <button onClick={() => onEdit(q)}
@@ -260,17 +279,21 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                   <span className="font-mono font-bold">{q.discounts.packingAmount === 0 ? "As Per Actuals" : `₹ ${fmt(q.discounts.packingAmount)}`}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-100 px-6 py-2 font-bold text-cyan-950">
-                  <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE BEFORE GST</span>
+                  <span className="text-xs font-semibold tracking-wide">TAXABLE VALUE</span>
                   <span className="font-mono font-bold">₹ {fmt(q.afterDiscount + q.discounts.transportationAmount + q.discounts.packingAmount)}</span>
                 </div>
-                <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
-                  <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
-                  <span className="font-mono font-bold">₹ {fmt(q.gst)}</span>
-                </div>
-                <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
-                  <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
-                  <span className="font-mono font-bold">₹ {fmt(q.grandTotal)}</span>
-                </div>
+                {q.discounts.gstEnabled !== false && (
+                  <>
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-red-50 px-6 py-2 text-red-700">
+                      <span className="text-xs font-semibold tracking-wide">GST @ 18%</span>
+                      <span className="font-mono font-bold">₹ {fmt(q.gst)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-green-600 px-6 py-2 text-sm font-bold text-white">
+                      <span className="text-xs font-semibold tracking-wide">GRAND TOTAL</span>
+                      <span className="font-mono font-bold">₹ {fmt(q.grandTotal)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
