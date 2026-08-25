@@ -311,7 +311,7 @@ async function downloadExcel(props: Props) {
     const certSize = emu(70); // each cert logo ~70px (larger, matching PDF size)
     const certY = emu(2);
     const startCol = 4; // Start from col 4 (HSN area) to spread across right side
-    let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(180)}" cy="${emu(50)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(180)}" cy="${emu(50)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+    let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(230)}" cy="${emu(65)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(230)}" cy="${emu(65)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
     // Add cert logos positioned right-side, row 0 — each in its own column slot
     for (let i = 0; i < certImages.length; i++) {
       const col = startCol + i; // one per column
@@ -399,7 +399,7 @@ async function buildQuotationPDF(props: Props) {
   // Load the inverted Prestair logo image
   const prestairLogo = await loadImg("prestair-inverted.png");
   if (prestairLogo) {
-    doc.addImage(prestairLogo, "PNG", ML - 2, 4, 55, 18);
+    doc.addImage(prestairLogo, "PNG", ML - 2, 3, 70, 23);
   }
 
   // Company details — dark blue
