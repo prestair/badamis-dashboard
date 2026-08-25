@@ -313,7 +313,7 @@ async function downloadExcel(props: Props) {
     // Build drawing XML with all images
     const certSize = emu(70); // each cert logo ~70px (larger, matching PDF size)
     const certY = emu(2);
-    const startCol = 4; // Start from col 4 (HSN area) to spread across right side
+    const startCol = 3; // cols 3-8 = D to I (within 9-column table A-I)
     let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(230)}" cy="${emu(65)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(230)}" cy="${emu(65)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
     // Add cert logos positioned right-side, row 0 — each in its own column slot
     for (let i = 0; i < certImages.length; i++) {
