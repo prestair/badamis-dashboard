@@ -148,9 +148,10 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
   }
 
   function startPasswordEdit(username: string) {
+    const user = users.find((u) => u.username === username);
     setChangePwdFor(username);
-    setNewPwd("");
-    setShowPwd(false);
+    setNewPwd(user?.password ?? "");
+    setShowPwd(true);
     setEditNameFor(null);
     setNewName("");
     setNotice(null);
