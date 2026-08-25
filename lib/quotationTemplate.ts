@@ -64,7 +64,7 @@ export async function exportTemplate() {
   data.push([]); r++;
 
   // ── PART A ──
-  data.push(Array(8).fill(null).map((_, i) => sc(i === 0 ? "PART - A" : "", partHeadA)));
+  data.push([sc("PART - A", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA)]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
   data.push([sc("SL NO\n(auto — leave blank)", thGrey), ...ITEM_HEADERS.slice(1).map((h) => sc(h, th))]); r++;
   addItemBlock(secStyleA, "SECTION", 2);
