@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuotations, SavedQuotation, SavedRowState } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
 import { PrestairBrandHeader } from "@/components/PrestairLogo";
+import { getRequesterInitials } from "@/components/RequesterManager";
 import dynamic from "next/dynamic";
 
 const QuotationDownload = dynamic(() => import("@/components/QuotationDownload"), { ssr: false });
@@ -11,7 +12,7 @@ const QuotationDownload = dynamic(() => import("@/components/QuotationDownload")
 // Generate quotation number based on FY.
 // Numbering resets to 1 each financial year (April 1).
 // For FY 2026-27, minimum starts at 554 (offset for pre-existing quotations).
-function generateQuotationNo(quotations: { quotationNo: string; date: string }[], fullName = ""): string {
+function generateQuotationNo(quotations: { quotationNo: string; date: string }[], fullName = "", requesterName = ""): string {
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
   const currentYear = now.getFullYear();
@@ -41,8 +42,12 @@ function generateQuotationNo(quotations: { quotationNo: string; date: string }[]
   const nextNum = Math.max(maxNum, floor) + 1;
   const num = String(nextNum).padStart(4, "0");
 
-  const initials = getInitials(fullName);
-  return `PS/${year}-${nextYear}/QT-${num}${initials ? " " + initials : ""}`;
+  const actorInitials = getInitials(fullName);
+  const reqInitials = requesterName ? getRequesterInitials(requesterName) : "";
+  // Format: PS/26-27/QT-0620 PS-AB  (actor initials - requester initials)
+  let suffix = actorInitials ? " " + actorInitials : "";
+  if (reqInitials) suffix += (suffix ? "-" : " ") + reqInitials;
+  return `PS/${year}-${nextYear}/QT-${num}${suffix}`;
 }
 
 // Get first letter of first name and surname
@@ -65,6 +70,11 @@ function fmtDate(dateStr: string): string {
 type QuotationItemName = {
   id: string;
   item_name: string;
+};
+
+type RequesterEntry = {
+  id: string;
+  name: string;
 };
 
 type ItemRow = {
@@ -152,8 +162,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   const [partyAddress, setPartyAddress] = useState(initialData?.partyAddress ?? "");
   const [partyGST,     setPartyGST]     = useState(initialData?.partyGST    ?? "");
   const [attention,    setAttention]    = useState(initialData?.attention    ?? "");
-  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo || generateQuotationNo(quotations, actorName));
-  const [subject,      setSubject]      = useState(initialData?.subject      ?? "");
+  const [quotationNo,  setQuotationNo]  = useState(initialData?.quotationNo || generateQuotationNo(quotations, actorName));  const [subject,      setSubject]      = useState(initialData?.subject      ?? "");
   const [seasonalEnabled, setSeasonalEnabled] = useState(initialData?.discounts.seasonal.enabled ?? false);
   const [seasonalDiscount, setSeasonalDiscount] = useState(
     initialData?.discounts.seasonal.amount ? String(initialData.discounts.seasonal.amount) : ""
@@ -190,6 +199,10 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     (initialData?.discounts.discountPercentB ?? 0) > 0
   );
   const [step1Errors, setStep1Errors] = useState<Record<string,string>>({});
+
+  // ── Requester state ────────────────────────────────────────────────────────
+  const [requesterOptions, setRequesterOptions] = useState<RequesterEntry[]>([]);
+  const [requester, setRequester] = useState(initialData?.requester ?? "");
 
   // ── Step 2: Item rows ──────────────────────────────────────────────────────
   const [itemRows, setItemRows] = useState<ItemRow[]>(() => initItemRows(initialData));
@@ -232,9 +245,26 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     }
   }, []);
 
+  const loadRequesterOptions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/requesters", { cache: "no-store" });
+      const data = await res.json();
+      setRequesterOptions(Array.isArray(data) ? data : []);
+    } catch { /* silent - requester dropdown stays empty */ }
+  }, []);
+
   useEffect(() => {
     void loadItemNameOptions();
-  }, [loadItemNameOptions]);
+    void loadRequesterOptions();
+  }, [loadItemNameOptions, loadRequesterOptions]);
+
+  // Auto-update quotation number when requester changes (new quotation only)
+  useEffect(() => {
+    if (!isEdit) {
+      setQuotationNo(generateQuotationNo(quotations, actorName, requester));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requester]);
 
   // close on Escape
   useEffect(() => {
@@ -485,7 +515,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     });
 
     const payload = {
-      quotationNo, date, partyName, partyAddress, partyGST, subject, attention,
+      quotationNo, date, partyName, partyAddress, partyGST, subject, attention, requester,
       rows: savedRows, gross: grossA, discount: totalDiscountA,
       discounts: {
         seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
@@ -659,11 +689,6 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                           onChange={(e) => setPartyAddress(e.target.value)}
                           rows={3} className={inp() + " resize-none mt-1"} />
                       </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">GST No.</label>
-                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value)}
-                          className={inp() + " mt-1"} />
-                      </div>
                     </div>
 
                     {/* RIGHT */}
@@ -692,6 +717,26 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                             className={`${inp()} mt-1 ${!canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}
                           />
                         </div>
+                      </div>
+                      {/* Requester dropdown */}
+                      <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Requester</label>
+                        <select
+                          value={requester}
+                          onChange={(e) => setRequester(e.target.value)}
+                          className={inp() + " mt-1"}
+                        >
+                          <option value="">— Select Requester —</option>
+                          {requesterOptions.map((r) => (
+                            <option key={r.id} value={r.name}>{r.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* GST No. moved above Kind Attention */}
+                      <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">GST No.</label>
+                        <input value={partyGST} onChange={(e) => setPartyGST(e.target.value)}
+                          className={inp() + " mt-1"} />
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Kind Attention</label>

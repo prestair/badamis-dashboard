@@ -1,0 +1,56 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Update QuotationDownload.tsx - PDF export conditional rendering": [
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785925994478
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926008120
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926125341
+      }
+    ],
+    "2. Update QuotationDownload.tsx - Excel export conditional rendering": [
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785925994622
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926132708
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926279968
+      }
+    ],
+    "3. Verify the fix works correctly": [
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785925994739
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926287154
+      },
+      {
+        "executionId": "2a496ed5-f7de-4308-a658-9832e0fe7b7f",
+        "chatSessionId": "sess_b17a068f-713b-4454-b3cc-ffac9df5414c",
+        "timestamp": 1785926361986
+      }
+    ]
+  }
+}

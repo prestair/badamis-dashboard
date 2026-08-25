@@ -39,6 +39,7 @@ export type SavedQuotation = {
   partyGST:     string;
   subject:      string;
   attention:    string;
+  requester:    string;
   rows:         SavedRowState[];
   gross:        number;
   discount:     number;
@@ -127,6 +128,7 @@ function mapRow(r: any): SavedQuotation {
     partyGST:     r.party_gst     ?? "",
     subject:      r.subject       ?? "",
     attention:    r.attention     ?? "",
+    requester:    r.requester     ?? "",
     rows:         normalizeSavedRows(items),
     gross:        Number(r.gross)         || 0,
     discount:     storedDiscount,
@@ -175,6 +177,7 @@ function toPayload(
     partyGST:      q.partyGST,
     subject:       q.subject,
     attention:     q.attention,
+    requester:     q.requester,
     rows:          withQuotationDiscounts(q.rows, q.discounts, q.partBRows),
     gross:         q.gross,
     discount:      q.discount,

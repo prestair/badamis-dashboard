@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 const QuotationModal     = dynamic(() => import("@/components/QuotationModal"),     { ssr: false });
 const QuotationViewModal = dynamic(() => import("@/components/QuotationViewModal"), { ssr: false });
 const ItemNameManager    = dynamic(() => import("@/components/ItemNameManager"),    { ssr: false });
+const RequesterManager   = dynamic(() => import("@/components/RequesterManager"),   { ssr: false });
 
 type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
@@ -36,8 +37,9 @@ export default function HeaderActions() {
     setDateFrom,
     setDateTo,
   } = useQuotations();
-  const [showCreate,    setShowCreate]    = useState(false);
-  const [showItemNames, setShowItemNames] = useState(false);
+  const [showCreate,       setShowCreate]       = useState(false);
+  const [showItemNames,    setShowItemNames]    = useState(false);
+  const [showRequesters,   setShowRequesters]   = useState(false);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -190,6 +192,7 @@ export default function HeaderActions() {
         partyGST: "",
         subject: result.subject || "",
         attention: result.attention || "",
+        requester: "",
         rows: result.rows,
         gross: result.gross,
         discount,
@@ -236,6 +239,15 @@ export default function HeaderActions() {
             className="flex items-center gap-2 rounded-lg border border-cyan-400 bg-cyan-50 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm transition-all hover:bg-cyan-100 active:scale-95"
           >
             Item Names
+          </button>
+        )}
+        {loggedRole === "admin" && (
+          <button
+            type="button"
+            onClick={() => setShowRequesters(true)}
+            className="flex items-center gap-2 rounded-lg border border-violet-400 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 shadow-sm transition-all hover:bg-violet-100 active:scale-95"
+          >
+            Requesters
           </button>
         )}
         {/* Edit last */}
@@ -522,6 +534,7 @@ export default function HeaderActions() {
       {/* ── Modals ── */}
       {showCreate     && <QuotationModal onClose={() => setShowCreate(false)} />}
       {showItemNames  && <ItemNameManager onClose={() => setShowItemNames(false)} />}
+      {showRequesters && <RequesterManager onClose={() => setShowRequesters(false)} />}
       {editQuotation  && <QuotationModal onClose={() => setEditQuotation(null)} initialData={editQuotation} />}
       {viewQuotation  && (
         <QuotationViewModal

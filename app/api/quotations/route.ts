@@ -13,6 +13,7 @@ function toRow(body: Record<string, unknown>, rows: unknown = body.rows) {
     party_gst:      body.partyGST,
     subject:        body.subject,
     attention:      body.attention,
+    requester:      body.requester ?? "",
     rows,
     gross:          body.gross,
     discount:       body.discount,
