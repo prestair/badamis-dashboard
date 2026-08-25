@@ -247,7 +247,7 @@ export default function HeaderActions() {
             onClick={() => setShowRequesters(true)}
             className="flex items-center gap-2 rounded-lg border border-violet-400 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 shadow-sm transition-all hover:bg-violet-100 active:scale-95"
           >
-            Requesters
+            Requester
           </button>
         )}
         {/* Edit last */}

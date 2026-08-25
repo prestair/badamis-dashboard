@@ -180,7 +180,7 @@ export default function RequesterManager({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-700">
-                  Requesters ({entries.length})
+                  Requester ({entries.length})
                 </p>
                 <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search…"
