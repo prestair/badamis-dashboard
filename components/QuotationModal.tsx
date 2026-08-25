@@ -701,11 +701,11 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   </div>
 
                   {/* ── Row 2: Address | Requester + GST + Kind Attn ── */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+                    <div className="flex flex-col">
                       <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Address</label>
                       <textarea value={partyAddress} onChange={(e) => setPartyAddress(e.target.value)}
-                        rows={3} className={inp() + " resize-none mt-1"} />
+                        className={inp() + " resize-none mt-1 flex-1"} style={{minHeight:"112px"}} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -740,57 +740,87 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       className={inp() + " mt-1 font-semibold"} />
                   </div>
 
-                  {/* Optional total-level discounts */}
-                  {/* ── Discount & Part B Configuration ── */}
-                  {/* ── Discounts & Configuration (compact grid) ── */}
+                  {/* ── Discounts & Configuration (Part A | Part B side by side) ── */}
                   <div className="rounded-xl border border-slate-200 overflow-hidden">
                     <div className="bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
                       Discounts & Configuration
                     </div>
+                    <div className="grid grid-cols-2 divide-x divide-slate-200">
 
-                    {/* Row grid */}
-                    <div className="divide-y divide-slate-100">
+                      {/* ── PART A ── */}
+                      <div className="divide-y divide-slate-100">
+                        <div className="bg-blue-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-blue-600 text-center">Part A</div>
 
-                      {/* Discount % Part A — toggle + input inline */}
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <span className="text-xs text-slate-600 font-medium">Discount % <span className="text-slate-400">(Part A)</span></span>
-                        <div className="flex items-center gap-2">
-                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
-                            <button type="button" onClick={() => setDiscountAEnabled(true)} aria-pressed={discountAEnabled}
-                              className={`px-2.5 py-1 transition-colors ${discountAEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
-                            <button type="button" onClick={() => { setDiscountAEnabled(false); setDiscountPercentA(""); }} aria-pressed={!discountAEnabled}
-                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!discountAEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                        {/* Discount % Part A */}
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">Discount %</span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                              <button type="button" onClick={() => setDiscountAEnabled(true)} aria-pressed={discountAEnabled}
+                                className={`px-2.5 py-1 transition-colors ${discountAEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                              <button type="button" onClick={() => { setDiscountAEnabled(false); setDiscountPercentA(""); }} aria-pressed={!discountAEnabled}
+                                className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!discountAEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                            </div>
+                            {discountAEnabled && (
+                              <input type="number" min="0" max="100" step="0.01" value={discountPercentA}
+                                onChange={(e) => setDiscountPercentA(e.target.value)} placeholder="0"
+                                className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                            )}
                           </div>
-                          {discountAEnabled && (
-                            <input type="number" min="0" max="100" step="0.01" value={discountPercentA}
-                              onChange={(e) => setDiscountPercentA(e.target.value)} placeholder="0"
-                              className="w-16 rounded border border-slate-300 bg-white px-2 py-1 text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-300" />
-                          )}
+                        </div>
+
+                        {/* Special Discount */}
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">Special Discount</span>
+                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                            <button type="button" onClick={() => setSpecialEnabled(true)} aria-pressed={specialEnabled}
+                              className={`px-2.5 py-1 transition-colors ${specialEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => setSpecialEnabled(false)} aria-pressed={!specialEnabled}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!specialEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                          </div>
+                        </div>
+
+                        {/* Seasonal Discount */}
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">Seasonal Discount</span>
+                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                            <button type="button" onClick={() => setSeasonalEnabled(true)} aria-pressed={seasonalEnabled}
+                              className={`px-2.5 py-1 transition-colors ${seasonalEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => setSeasonalEnabled(false)} aria-pressed={!seasonalEnabled}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!seasonalEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                          </div>
+                        </div>
+
+                        {/* GST Required */}
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">GST Required</span>
+                          <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
+                            <button type="button" onClick={() => setGstEnabled(true)} aria-pressed={gstEnabled}
+                              className={`px-2.5 py-1 transition-colors ${gstEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => setGstEnabled(false)} aria-pressed={!gstEnabled}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!gstEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Special Discount, Seasonal Discount, Part B, GST Required */}
-                      {([
-                        ["Special Discount", specialEnabled, setSpecialEnabled] as const,
-                        ["Seasonal Discount", seasonalEnabled, setSeasonalEnabled] as const,
-                        ["Part B", partBEnabled, setPartBEnabled] as const,
-                        ["GST Required", gstEnabled, setGstEnabled] as const,
-                      ]).map(([label, enabled, setEnabled]) => (
-                        <div key={label} className="flex items-center justify-between px-3 py-2">
-                          <span className="text-xs text-slate-600 font-medium">{label}</span>
+                      {/* ── PART B ── */}
+                      <div className="divide-y divide-slate-100">
+                        <div className="bg-indigo-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 text-center">Part B</div>
+
+                        {/* Enable Part B */}
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs text-slate-600 font-medium">Enable Part B</span>
                           <div className="flex rounded-md overflow-hidden border border-slate-200 text-[10px] font-bold">
-                            <button type="button" onClick={() => (setEnabled as (v: boolean) => void)(true)} aria-pressed={enabled as boolean}
-                              className={`px-2.5 py-1 transition-colors ${(enabled as boolean) ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
-                            <button type="button" onClick={() => (setEnabled as (v: boolean) => void)(false)} aria-pressed={!(enabled as boolean)}
-                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!(enabled as boolean) ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
+                            <button type="button" onClick={() => setPartBEnabled(true)} aria-pressed={partBEnabled}
+                              className={`px-2.5 py-1 transition-colors ${partBEnabled ? "bg-green-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>YES</button>
+                            <button type="button" onClick={() => setPartBEnabled(false)} aria-pressed={!partBEnabled}
+                              className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${!partBEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
                           </div>
                         </div>
-                      ))}
 
-                      {/* Discount % Part B — only when Part B enabled */}
-                      {partBEnabled && (
-                        <div className="flex items-center justify-between bg-indigo-50/40 px-3 py-2">
-                          <span className="text-xs text-indigo-600 font-medium">Discount % <span className="text-indigo-400">(Part B)</span></span>
+                        {/* Discount % Part B */}
+                        <div className={`flex items-center justify-between px-3 py-2 ${!partBEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+                          <span className="text-xs text-slate-600 font-medium">Discount %</span>
                           <div className="flex items-center gap-2">
                             <div className="flex rounded-md overflow-hidden border border-indigo-200 text-[10px] font-bold">
                               <button type="button" onClick={() => setDiscountBEnabled(true)} aria-pressed={discountBEnabled}
@@ -798,14 +828,18 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                               <button type="button" onClick={() => { setDiscountBEnabled(false); setDiscountPercentB(""); }} aria-pressed={!discountBEnabled}
                                 className={`px-2.5 py-1 transition-colors border-l border-indigo-200 ${!discountBEnabled ? "bg-slate-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"}`}>NO</button>
                             </div>
-                            {discountBEnabled && (
+                            {discountBEnabled && partBEnabled && (
                               <input type="number" min="0" max="100" step="0.01" value={discountPercentB}
                                 onChange={(e) => setDiscountPercentB(e.target.value)} placeholder="0"
                                 className="w-16 rounded border border-indigo-200 bg-white px-2 py-1 text-right text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
                             )}
                           </div>
                         </div>
-                      )}
+
+                        {/* Placeholder rows to match Part A height */}
+                        <div className="px-3 py-2 text-xs text-slate-300 italic">—</div>
+                        <div className="px-3 py-2 text-xs text-slate-300 italic">—</div>
+                      </div>
 
                     </div>
                   </div>
