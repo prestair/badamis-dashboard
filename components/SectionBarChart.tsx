@@ -224,11 +224,21 @@ export default function SectionBarChart() {
     ...user,
     amount: monthlyData.reduce((sum, month) => sum + Number(month[user.key] ?? 0), 0),
     quotationCount: monthlyData.reduce((sum, month) => sum + (month.counts[user.key] ?? 0), 0),
-  })), [monthlyData, userSeries]);
+  })).filter((user) => user.quotationCount > 0), [monthlyData, userSeries]);
 
   const isDailyView = selectedMonthIndex !== null;
   const selectedMonth = isDailyView ? FISCAL_MONTHS[selectedMonthIndex] : null;
   const chartData = isDailyView ? dailyData : monthlyData;
+
+  // Sirf wahi users legend/badges mein dikhe jinke selected period mein min 1 quotation ho
+  const activeUserTotals = useMemo(() => {
+    if (!isDailyView) return financialYearTotals; // already filtered above
+    return userSeries.map((user) => ({
+      ...user,
+      amount: dailyData.reduce((sum, day) => sum + Number(day[user.key] ?? 0), 0),
+      quotationCount: dailyData.reduce((sum, day) => sum + (day.counts[user.key] ?? 0), 0),
+    })).filter((user) => user.quotationCount > 0);
+  }, [isDailyView, financialYearTotals, userSeries, dailyData]);
 
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm">
@@ -279,7 +289,7 @@ export default function SectionBarChart() {
       ) : (
         <>
           <div className="mb-2 flex flex-wrap gap-2">
-            {financialYearTotals.map((user) => (
+            {activeUserTotals.map((user) => (
               <div key={user.key} className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-500">
                 <span className="mr-1.5 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: user.color }} />
                 <span className="font-semibold text-slate-700">{user.fullName}</span>
