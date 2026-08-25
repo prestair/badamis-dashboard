@@ -383,12 +383,12 @@ async function buildQuotationPDF(props: Props) {
 
   // Load only raster logos so every addImage call is browser-safe.
   const logoFiles = [
-    { file: "uaf.webp", fmt: "WEBP", w: 9, h: 9 },
-    { file: "ce.jpg", fmt: "JPEG", w: 9, h: 9 },
-    { file: "images.png", fmt: "PNG", w: 9, h: 9 },
-    { file: "iaf.png", fmt: "PNG", w: 9, h: 9 },
-    { file: "gacb.png", fmt: "PNG", w: 9, h: 9 },
-    { file: "iso.png", fmt: "PNG", w: 9, h: 9 },
+    { file: "uaf.webp", fmt: "WEBP", w: 14, h: 14 },
+    { file: "ce.jpg",   fmt: "JPEG", w: 14, h: 14 },
+    { file: "images.png", fmt: "PNG", w: 14, h: 14 },
+    { file: "iaf.png",  fmt: "PNG",  w: 14, h: 14 },
+    { file: "gacb.png", fmt: "PNG",  w: 14, h: 14 },
+    { file: "iso.png",  fmt: "PNG",  w: 14, h: 14 },
   ];
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
@@ -414,14 +414,16 @@ async function buildQuotationPDF(props: Props) {
   doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 29);
   doc.text("India", ML, 32);
 
-  // Certification logos top-right, without an enclosing border.
-  const logoBoxX = 130;
-  let lx = logoBoxX + 3;
+  // Certification logos top-right — 6 logos × (14w + 2gap) = ~96mm
+  // Start at x=105 so all 6 fit within right half of A4 (MR=200)
+  const logoBoxX = 104;
+  let lx = logoBoxX;
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
-      doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 6, logoFiles[i].w, logoFiles[i].h);
+      // vertically center logos in header (header bottom ~35, logo h=14, so y = (35-14)/2 = 10.5)
+      doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 10, logoFiles[i].w, logoFiles[i].h);
     }
-    lx += logoFiles[i].w + 2.5;
+    lx += logoFiles[i].w + 2;
   }
 
   // Horizontal line below header
@@ -854,8 +856,8 @@ export async function printSavedQuotation(quotation: SavedQuotation, printWindow
 // Helper: draw footer logos centered at bottom of page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function drawFooterLogos(doc: any, logos: (string | null)[], logoFiles: { file: string; fmt: string; w: number; h: number }[], W: number, ML: number, MR: number) {
-  const footerY = 278;
-  const gap = 4;
+  const footerY = 274;
+  const gap = 5;
   const totalW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * gap;
   let x = (W - totalW) / 2;
   for (let i = 0; i < logoFiles.length; i++) {
