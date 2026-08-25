@@ -276,7 +276,7 @@ async function downloadExcel(props: Props) {
     { wch: 10 },  // RATE
     { wch: 12 },  // AMOUNT
   ];
-  ws["!rows"] = [{ hpt: 20 }, { hpt: 20 }, { hpt: 20 }]; // 3 rows for logo
+  ws["!rows"] = [{ hpt: 55 }, { hpt: 20 }, { hpt: 20 }]; // row 0 taller for larger logos
 
   XLSX.utils.book_append_sheet(wb, ws, "Quotation");
 
@@ -308,16 +308,15 @@ async function downloadExcel(props: Props) {
 
     const emu = (px: number) => Math.round(px * 9525);
     // Build drawing XML with all images
-    const certSize = emu(45); // each cert logo ~45px
-    const certY = 0;
-    const startCol = 5; // Start from HSN column area (right side)
+    const certSize = emu(70); // each cert logo ~70px (larger, matching PDF size)
+    const certY = emu(2);
+    const startCol = 4; // Start from col 4 (HSN area) to spread across right side
     let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(180)}" cy="${emu(50)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(180)}" cy="${emu(50)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
-    // Add cert logos positioned right-side, row 0
+    // Add cert logos positioned right-side, row 0 — each in its own column slot
     for (let i = 0; i < certImages.length; i++) {
-      const col = startCol + Math.floor(i * 0.7); // spread across cols 5-8
-      const colOff = (i % 2 === 0) ? 0 : emu(14);
+      const col = startCol + i; // one per column
       const rIdNum = i + 2;
-      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>${colOff}</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${certSize}" cy="${certSize}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${certSize}" cy="${certSize}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${certSize}" cy="${certSize}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${certSize}" cy="${certSize}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
     }
     zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${drawingPics}</xdr:wsDr>`);
     // Build rels for all images
