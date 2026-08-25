@@ -194,6 +194,7 @@ export default function HeaderActions() {
         attention: result.attention || "",
         requester: result.requester || "",
         rows: result.rows,
+        partBRows: result.partBRows && result.partBRows.length > 0 ? result.partBRows : undefined,
         gross: result.gross,
         discount,
         discounts: result.discounts,
