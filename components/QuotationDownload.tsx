@@ -222,9 +222,12 @@ async function downloadExcel(props: Props) {
     }
 
     // Part B totals
-    pushT("TOTAL ", exGrossB, ts);
-    if (exPctB > 0) pushT(`DISCOUNT ${exPctB}%`, exDiscountAmountB, ts);
-    pushT("TOTAL AFTER DISCOUNT (B)", exAfterDiscountB, ts);
+    // Part B totals — agar discount 0 ho to sirf TOTAL AMOUNT (B) dikhe
+    pushT("TOTAL AMOUNT (B)", exGrossB, ts);
+    if (exPctB > 0) {
+      pushT(`DISCOUNT ${exPctB}%`, exDiscountAmountB, ts);
+      pushT("TOTAL AFTER DISCOUNT (B)", exAfterDiscountB, ts);
+    }
     pushT("TOTAL AMOUNT (A+B)", exCombined, ts);
   }
 
@@ -672,11 +675,13 @@ async function buildQuotationPDF(props: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ty = ((doc as any).lastAutoTable?.finalY ?? ty + 10) + 0;
 
-    // ── Part B totals ──
+    // ── Part B totals ── agar discount 0 ho to sirf TOTAL AMOUNT (B) dikhe
     if (ty + 15 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
-    const partBTotals: string[][] = [["TOTAL ", fmtNum(grossBVal)]];
-    if (pctB > 0) partBTotals.push([`DISCOUNT ${pctB}%`, fmtNum(discountAmountB)]);
-    partBTotals.push(["TOTAL AFTER DISCOUNT (B)", fmtNum(afterDiscountBVal)]);
+    const partBTotals: string[][] = [["TOTAL AMOUNT (B)", fmtNum(grossBVal)]];
+    if (pctB > 0) {
+      partBTotals.push([`DISCOUNT ${pctB}%`, fmtNum(discountAmountB)]);
+      partBTotals.push(["TOTAL AFTER DISCOUNT (B)", fmtNum(afterDiscountBVal)]);
+    }
     autoTable(doc, { startY: ty, body: partBTotals, ...tStyle });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ty = ((doc as any).lastAutoTable?.finalY ?? ty + 15) + 0;
