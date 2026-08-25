@@ -250,22 +250,15 @@ export default function HeaderActions() {
             Requester
           </button>
         )}
-        {/* Edit last */}
-        <button onClick={() => {
-          if (quotations.length > 0) setEditQuotation(quotations[quotations.length - 1]);
-          else setShowCreate(true);
-        }}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-md">
-          <span>✏️</span> Edit
-        </button>
+        {/* Refresh + Search on same line */}
         <button
           type="button"
           onClick={() => refresh()}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 active:scale-95 transition-all disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 active:scale-95 transition-all disabled:opacity-50 flex-shrink-0"
           title="Refresh quotations"
         >
-          <span className={loading ? "animate-spin" : ""}>↻</span> Refresh
+          <span className={loading ? "animate-spin inline-block" : "inline-block"}>↻</span> Refresh
         </button>
         <div className="relative min-w-[280px] w-full max-w-sm">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true">⌕</span>
