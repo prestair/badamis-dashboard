@@ -182,24 +182,27 @@ async function downloadExcel(props: Props) {
   // Part A totals
   const exPctA = safeNum(props.discounts.discountPercentA ?? 0);
   const exDiscountAmountA = Math.round(safeNum(props.gross) * exPctA / 100);
-  const exSpecialAmt = safeNum(props.discounts.special.amount);
+  const exSpecialAmt  = safeNum(props.discounts.special.amount);
   const exSeasonalAmt = safeNum(props.discounts.seasonal.amount);
-  const exAfterDiscountA = Math.max(0, safeNum(props.gross) - exDiscountAmountA - exSpecialAmt - exSeasonalAmt);
+  const exAfterDiscountA = Math.max(0, safeNum(props.gross) - exDiscountAmountA - exSpecialAmt); // excludes seasonal
+  const exFinalTotalA    = Math.max(0, exAfterDiscountA - exSeasonalAmt);                        // after seasonal
+  const exEffectiveA     = props.discounts.seasonal.enabled ? exFinalTotalA : exAfterDiscountA;
   const exPartBEnabled = props.discounts.partBEnabled === true;
   const exPctB = safeNum(props.discounts.discountPercentB ?? 0);
   const exGrossB = safeNum(props.grossB ?? 0);
   const exDiscountAmountB = Math.round(exGrossB * exPctB / 100);
   const exAfterDiscountB = Math.max(0, exGrossB - exDiscountAmountB);
-  const exCombined = exAfterDiscountA + (exPartBEnabled ? exAfterDiscountB : 0);
+  const exCombined = exEffectiveA + (exPartBEnabled ? exAfterDiscountB : 0);
 
   pushT("TOTAL AMOUNT", safeNum(props.gross), ts);
   if (exPctA > 0) pushT(`DISCOUNT ${exPctA}%`, exDiscountAmountA, ts);
   if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", exSpecialAmt, ts);
-  if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
   if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
   if (exPctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
     pushT("TOTAL AFTER DISCOUNT" + (exPartBEnabled ? " (A)" : ""), exAfterDiscountA, ts);
   }
+  if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
+  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL" + (exPartBEnabled ? " (A)" : ""), exFinalTotalA, ts);
 
   // Part B rows + totals in Excel
   if (exPartBEnabled && props.partBRows && props.partBRows.length > 0) {
@@ -601,14 +604,16 @@ async function buildQuotationPDF(props: Props) {
   const partBEnabled = props.discounts.partBEnabled === true;
   const pctA = safeNum(props.discounts.discountPercentA ?? 0);
   const discountAmountA = Math.round(safeNum(props.gross) * pctA / 100);
-  const specialAmt = safeNum(props.discounts.special.amount);
+  const specialAmt  = safeNum(props.discounts.special.amount);
   const seasonalAmt = safeNum(props.discounts.seasonal.amount);
-  const afterDiscountA = Math.max(0, safeNum(props.gross) - discountAmountA - specialAmt - seasonalAmt);
+  const afterDiscountA = Math.max(0, safeNum(props.gross) - discountAmountA - specialAmt); // excludes seasonal
+  const finalTotalA    = Math.max(0, afterDiscountA - seasonalAmt);                        // after seasonal
+  const effectiveA     = props.discounts.seasonal.enabled ? finalTotalA : afterDiscountA;
   const pctB = safeNum(props.discounts.discountPercentB ?? 0);
   const grossBVal = safeNum(props.grossB ?? 0);
   const discountAmountB = Math.round(grossBVal * pctB / 100);
   const afterDiscountBVal = Math.max(0, grossBVal - discountAmountB);
-  const combinedAfterDiscount = afterDiscountA + (partBEnabled ? afterDiscountBVal : 0);
+  const combinedAfterDiscount = effectiveA + (partBEnabled ? afterDiscountBVal : 0);
 
   // Items table column widths: 10+14+16+58+28+18+10+16 = 170 (cols 0-7), col 8 = 20
   // Totals table must match: label col = 170, amount col = 20 so AMOUNT aligns perfectly
@@ -626,11 +631,12 @@ async function buildQuotationPDF(props: Props) {
   const partATotals: string[][] = [["TOTAL AMOUNT", fmtNum(safeNum(props.gross))]];
   if (pctA > 0) partATotals.push([`DISCOUNT ${pctA}%`, fmtNum(discountAmountA)]);
   if (props.discounts.special.enabled) partATotals.push(["SPECIAL DISCOUNT", fmtNum(specialAmt)]);
-  if (props.discounts.seasonal.enabled) partATotals.push(["SEASONAL DISCOUNT", fmtNum(seasonalAmt)]);
   if (props.discounts.legacyAmount > 0) partATotals.push(["DISCOUNT", fmtNum(safeNum(props.discounts.legacyAmount))]);
   if (pctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
     partATotals.push(["TOTAL AFTER DISCOUNT" + (partBEnabled ? " (A)" : ""), fmtNum(afterDiscountA)]);
   }
+  if (props.discounts.seasonal.enabled) partATotals.push(["SEASONAL DISCOUNT", fmtNum(seasonalAmt)]);
+  if (props.discounts.seasonal.enabled) partATotals.push(["FINAL TOTAL" + (partBEnabled ? " (A)" : ""), fmtNum(finalTotalA)]);
   autoTable(doc, { startY: ty, body: partATotals, ...tStyle });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ty = ((doc as any).lastAutoTable?.finalY ?? ty + 20) + 0;

@@ -400,6 +400,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     seasonalAmount,
     totalDiscountA,
     afterDiscountA,
+    finalTotalA,
     grossB,
     discountAmountB,
     afterDiscountB,
@@ -413,14 +414,15 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     gross,
     afterDiscount,
   } = useMemo(() => {
-    // Part A
+    // Part A — new calculation: afterDiscountA excludes seasonal, finalTotalA = afterDiscountA - seasonal
     const grossA = itemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0);
     const pctA = discountAEnabled ? Math.max(0, Number(discountPercentA) || 0) : 0;
     const discountAmountA = Math.round(grossA * pctA / 100);
     const specialAmount = specialEnabled ? Math.max(0, Number(specialDiscount) || 0) : 0;
     const seasonalAmount = seasonalEnabled ? Math.max(0, Number(seasonalDiscount) || 0) : 0;
     const totalDiscountA = discountAmountA + specialAmount + seasonalAmount;
-    const afterDiscountA = Math.max(0, grossA - totalDiscountA);
+    const afterDiscountA = Math.max(0, grossA - discountAmountA - specialAmount); // excludes seasonal
+    const finalTotalA    = Math.max(0, afterDiscountA - seasonalAmount);           // after seasonal
 
     // Part B
     const grossB = partBEnabled ? partBItemRows.reduce((sum, row) => sum + (rowAmt(row) ?? 0), 0) : 0;
@@ -428,8 +430,9 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     const discountAmountB = Math.round(grossB * pctB / 100);
     const afterDiscountB = Math.max(0, grossB - discountAmountB);
 
-    // Combined
-    const combinedAfterDiscount = afterDiscountA + (partBEnabled ? afterDiscountB : 0);
+    // Combined — use finalTotalA (after seasonal) as effective Part A amount
+    const effectiveA = seasonalEnabled ? finalTotalA : afterDiscountA;
+    const combinedAfterDiscount = effectiveA + (partBEnabled ? afterDiscountB : 0);
     const transportationAmount = Math.max(0, Number(transportationCharges) || 0);
     const packingAmount = Math.max(0, Number(packingCharges) || 0);
     const taxableAmount = combinedAfterDiscount + transportationAmount + packingAmount;
@@ -437,7 +440,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     const grandTotal = taxableAmount + gst;
 
     return {
-      grossA, discountAmountA, specialAmount, seasonalAmount, totalDiscountA, afterDiscountA,
+      grossA, discountAmountA, specialAmount, seasonalAmount, totalDiscountA, afterDiscountA, finalTotalA,
       grossB, discountAmountB, afterDiscountB,
       combinedAfterDiscount, transportationAmount, packingAmount, taxableAmount, gst, grandTotal,
       // Backward-compat: gross = A gross, afterDiscount = combinedAfterDiscount
@@ -1223,7 +1226,8 @@ export default function QuotationModal({ onClose, initialData }: Props) {
 
                 {/* ── Totals ── */}
                 <div className="border-t-2 border-slate-300">
-                  {/* Part A Totals */}
+                  {/* Part A Totals — new order:
+                      TOTAL AMOUNT → DISCOUNT% → SPECIAL DISCOUNT → TOTAL AFTER DISCOUNT → SEASONAL DISCOUNT → FINAL TOTAL (only if seasonal) */}
                   <div className="flex items-center justify-between border-b border-slate-200 bg-yellow-50 px-6 py-2 font-bold text-yellow-900">
                     <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT{partBEnabled ? " (A)" : ""}</span>
                     <span className="font-mono font-bold">₹ {fmt(grossA)}</span>
@@ -1239,41 +1243,36 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       <label htmlFor="special-discount-amount" className="text-xs font-semibold tracking-wide">SPECIAL DISCOUNT</label>
                       <div className="flex items-center gap-2">
                         <span className="font-bold">₹</span>
-                        <input
-                          id="special-discount-amount"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={specialDiscount}
-                          onChange={(event) => setSpecialDiscount(event.target.value)}
-                          placeholder="Enter amount"
-                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                        />
+                        <input id="special-discount-amount" type="number" min="0" step="0.01" value={specialDiscount}
+                          onChange={(e) => setSpecialDiscount(e.target.value)} placeholder="Enter amount"
+                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300" />
                       </div>
                     </div>
                   )}
+                  {/* TOTAL AFTER DISCOUNT — shown when any of discount%, special, OR seasonal enabled */}
+                  {(Number(discountPercentA) > 0 || specialEnabled || seasonalEnabled) && (
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
+                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT{partBEnabled ? " (A)" : ""}</span>
+                      <span className="font-mono font-bold">₹ {fmt(afterDiscountA)}</span>
+                    </div>
+                  )}
+                  {/* SEASONAL DISCOUNT — after TOTAL AFTER DISCOUNT */}
                   {seasonalEnabled && (
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
                       <label htmlFor="seasonal-discount-amount" className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</label>
                       <div className="flex items-center gap-2">
                         <span className="font-bold">₹</span>
-                        <input
-                          id="seasonal-discount-amount"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={seasonalDiscount}
-                          onChange={(event) => setSeasonalDiscount(event.target.value)}
-                          placeholder="Enter amount"
-                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                        />
+                        <input id="seasonal-discount-amount" type="number" min="0" step="0.01" value={seasonalDiscount}
+                          onChange={(e) => setSeasonalDiscount(e.target.value)} placeholder="Enter amount"
+                          className="w-36 rounded border border-orange-300 bg-white px-3 py-1.5 text-right font-mono text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300" />
                       </div>
                     </div>
                   )}
-                  {(Number(discountPercentA) > 0 || specialEnabled || seasonalEnabled) && (
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
-                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT{partBEnabled ? " (A)" : ""}</span>
-                      <span className="font-mono font-bold">₹ {fmt(afterDiscountA)}</span>
+                  {/* FINAL TOTAL — only shown when seasonal discount is enabled */}
+                  {seasonalEnabled && (
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-red-100 px-6 py-2 font-bold text-red-900">
+                      <span className="text-xs font-semibold tracking-wide">FINAL TOTAL{partBEnabled ? " (A)" : ""}</span>
+                      <span className="font-mono font-bold">₹ {fmt(finalTotalA)}</span>
                     </div>
                   )}
 

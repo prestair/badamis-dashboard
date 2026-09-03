@@ -266,10 +266,32 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                     <span className="font-mono font-bold">₹ {fmt(q.discounts.legacyAmount)}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
-                  <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
-                  <span className="font-mono font-bold">₹ {fmt(q.afterDiscount)}</span>
-                </div>
+                {/* TOTAL AFTER DISCOUNT — always show if any discount active */}
+                {(q.discounts.discountPercentA || q.discounts.special.enabled || q.discounts.seasonal.enabled || q.discounts.legacyAmount > 0) && (() => {
+                  const discAmt = Math.round(q.gross * (q.discounts.discountPercentA ?? 0) / 100);
+                  const afterDisc = Math.max(0, q.gross - discAmt - (q.discounts.special.enabled ? q.discounts.special.amount : 0) - q.discounts.legacyAmount);
+                  const finalTotal = Math.max(0, afterDisc - (q.discounts.seasonal.enabled ? q.discounts.seasonal.amount : 0));
+                  return (
+                    <>
+                      <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
+                        <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
+                        <span className="font-mono font-bold">₹ {fmt(afterDisc)}</span>
+                      </div>
+                      {q.discounts.seasonal.enabled && (
+                        <div className="flex items-center justify-between border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-700">
+                          <span className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</span>
+                          <span className="font-mono font-bold">₹ {fmt(q.discounts.seasonal.amount)}</span>
+                        </div>
+                      )}
+                      {q.discounts.seasonal.enabled && (
+                        <div className="flex items-center justify-between border-b border-slate-200 bg-red-100 px-6 py-2 font-bold text-red-900">
+                          <span className="text-xs font-semibold tracking-wide">FINAL TOTAL</span>
+                          <span className="font-mono font-bold">₹ {fmt(finalTotal)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="flex items-center justify-between border-b border-slate-200 bg-cyan-50 px-6 py-2 text-cyan-900">
                   <span className="text-xs font-semibold tracking-wide">TRANSPORTATION CHARGES</span>
                   <span className="font-mono font-bold">{q.discounts.transportationAmount === 0 ? "As Per Actuals" : `₹ ${fmt(q.discounts.transportationAmount)}`}</span>
