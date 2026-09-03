@@ -775,10 +775,9 @@ async function buildQuotationPDF(props: Props) {
   doc.text("For Prestair Systems LLP", ML, ty);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // FOOTER LOGOS — on every page, centered at bottom
-  // ══════════════════════════════════════════════════════════════════════════
+  // FOOTER LOGOS — page 2 onwards only (page 1 has header logos already)
   const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
+  for (let i = 2; i <= pageCount; i++) {
     doc.setPage(i);
     drawFooterLogos(doc, logos, logoFiles, W, ML, MR);
   }
