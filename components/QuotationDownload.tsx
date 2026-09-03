@@ -286,7 +286,7 @@ async function downloadExcel(props: Props) {
   // Save with logo image injected into the xlsx zip
   const fileName = `Quotation_${(props.quotationNo || props.partyName).replace(/[/\\?%*:|"<>]/g, "-")}_${props.date}.xlsx`;
   try {
-    const logoRes = await fetch("/logos/prestair-inverted.png");
+    const logoRes = await fetch("/logos/prestair-new.png");
     if (!logoRes.ok) throw new Error("no logo");
     const logoBytes = new Uint8Array(await logoRes.arrayBuffer());
     const wbOut: ArrayBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
@@ -295,7 +295,7 @@ async function downloadExcel(props: Props) {
     zip.file("xl/media/image1.png", logoBytes);
 
     // Load certification logos
-    const certFiles = ["uaf.webp", "ce.jpg", "images.png", "iaf.png", "gacb.png", "iso.png"];
+    const certFiles = ["uaf.webp", "ce.jpg", "images.png", "iaf.png", "iso.png"];
     const certImages: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < certFiles.length; i++) {
       try {
@@ -385,22 +385,19 @@ async function buildQuotationPDF(props: Props) {
 
   // Load only raster logos so every addImage call is browser-safe.
   const logoFiles = [
-    { file: "uaf.webp", fmt: "WEBP", w: 14, h: 14 },
-    { file: "ce.jpg",   fmt: "JPEG", w: 14, h: 14 },
-    { file: "images.png", fmt: "PNG", w: 14, h: 14 },
-    { file: "iaf.png",  fmt: "PNG",  w: 14, h: 14 },
-    { file: "gacb.png", fmt: "PNG",  w: 14, h: 14 },
-    { file: "iso.png",  fmt: "PNG",  w: 14, h: 14 },
+    { file: "uaf.webp",   fmt: "WEBP", w: 14, h: 14 },
+    { file: "ce.jpg",     fmt: "JPEG", w: 14, h: 14 },
+    { file: "images.png", fmt: "PNG",  w: 14, h: 14 },
+    { file: "iaf.png",    fmt: "PNG",  w: 14, h: 14 },
+    // gacb.png removed (second last)
+    { file: "iso.png",    fmt: "PNG",  w: 14, h: 14 },
   ];
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 1 HEADER — Inverted logo from prestair-inverted.png
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // Load the inverted Prestair logo image
-  const prestairLogo = await loadImg("prestair-inverted.png");
+  // PAGE 1 HEADER — New Prestair logo
+  const prestairLogo = await loadImg("prestair-new.png");
   if (prestairLogo) {
     doc.addImage(prestairLogo, "PNG", ML - 2, 3, 70, 23);
   }
