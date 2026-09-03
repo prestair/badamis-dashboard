@@ -295,7 +295,7 @@ async function downloadExcel(props: Props) {
     zip.file("xl/media/image1.png", logoBytes);
 
     // Load certification logos
-    const certFiles = ["uaf.webp", "ce.jpg", "images.png", "iaf.png", "iso.png"];
+    const certFiles = ["nsf logo.png", "uaf.webp", "ce.jpg", "images.png", "iaf.png", "iso.png"];
     const certImages: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < certFiles.length; i++) {
       try {
@@ -385,12 +385,13 @@ async function buildQuotationPDF(props: Props) {
 
   // Load only raster logos so every addImage call is browser-safe.
   const logoFiles = [
-    { file: "uaf.webp",   fmt: "WEBP", w: 14, h: 14 },
-    { file: "ce.jpg",     fmt: "JPEG", w: 14, h: 14 },
-    { file: "images.png", fmt: "PNG",  w: 14, h: 14 },
-    { file: "iaf.png",    fmt: "PNG",  w: 14, h: 14 },
+    { file: "nsf logo.png", fmt: "PNG",  w: 14, h: 14 },
+    { file: "uaf.webp",     fmt: "WEBP", w: 14, h: 14 },
+    { file: "ce.jpg",       fmt: "JPEG", w: 14, h: 14 },
+    { file: "images.png",   fmt: "PNG",  w: 14, h: 14 },
+    { file: "iaf.png",      fmt: "PNG",  w: 14, h: 14 },
     // gacb.png removed (second last)
-    { file: "iso.png",    fmt: "PNG",  w: 14, h: 14 },
+    { file: "iso.png",      fmt: "PNG",  w: 14, h: 14 },
   ];
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
