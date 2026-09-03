@@ -401,29 +401,30 @@ async function buildQuotationPDF(props: Props) {
 
   // ══════════════════════════════════════════════════════════════════════════
   // PAGE 1 HEADER — New Prestair logo
-  const prestairLogo = await loadImg("prestair-new.png");
-  if (prestairLogo) {
-    doc.addImage(prestairLogo, "PNG", ML - 2, 3, 70, 23);
+  // Load as ArrayBuffer for direct PNG data injection (avoids lossy canvas re-encoding)
+  const prestairLogoUrl = await loadImg("prestair-new.png");
+  if (prestairLogoUrl) {
+    // Use FAST compression (NONE) to preserve PNG quality in PDF
+    // Size: 72mm wide × 25mm tall — proportional to 899×392px source
+    doc.addImage(prestairLogoUrl, "PNG", ML - 2, 2, 72, Math.round(72 * 392 / 899), undefined, "FAST");
   }
 
   // Company details — dark blue
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(26, 58, 107);
-  doc.text("Commercial Food Service Equipments", ML, 25.5);
+  doc.text("Commercial Food Service Equipments", ML, 34);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(60, 60, 60);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 29);
-  doc.text("India", ML, 32);
+  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 37.5);
+  doc.text("India", ML, 41);
 
   // Certification logos top-right — 6 logos × (14w + 2gap) = ~96mm
-  // Start at x=105 so all 6 fit within right half of A4 (MR=200)
   const logoBoxX = 104;
   let lx = logoBoxX;
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
-      // vertically center logos in header (header bottom ~35, logo h=14, so y = (35-14)/2 = 10.5)
       doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 10, logoFiles[i].w, logoFiles[i].h);
     }
     lx += logoFiles[i].w + 2;
@@ -432,10 +433,10 @@ async function buildQuotationPDF(props: Props) {
   // Horizontal line below header
   doc.setDrawColor(0);
   doc.setLineWidth(0.5);
-  doc.line(ML, 35, MR, 35);
+  doc.line(ML, 45, MR, 45);
 
   // Date and Quotation No
-  let y = 40;
+  let y = 50;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
