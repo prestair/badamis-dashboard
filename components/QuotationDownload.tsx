@@ -314,8 +314,9 @@ async function downloadExcel(props: Props) {
     for (const img of certImages) zip.file(`xl/media/${img.name}`, img.bytes);
 
     const emu = (px: number) => Math.round(px * 9525);
-    // Build drawing XML with all images
-    const certSize = emu(70); // each cert logo ~70px (larger, matching PDF size)
+    // All cert logos share the SAME height; width follows aspect ratio (same order as certFiles)
+    const certAspect = [691 / 577, 267 / 188, 1, 531 / 376, 1]; // nsf, ce, uaf, images, iaf
+    const certH = 60; // fixed height in px for every logo
     const certY = emu(2);
     const startCol = 3; // cols 3-8 = D to I (within 9-column table A-I)
     let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(230)}" cy="${emu(65)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(230)}" cy="${emu(65)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
@@ -323,7 +324,9 @@ async function downloadExcel(props: Props) {
     for (let i = 0; i < certImages.length; i++) {
       const col = startCol + i; // one per column
       const rIdNum = i + 2;
-      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${certSize}" cy="${certSize}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${certSize}" cy="${certSize}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+      const cy = emu(certH);
+      const cx = emu(Math.round(certH * (certAspect[i] ?? 1))); // width from aspect ratio
+      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
     }
     zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${drawingPics}</xdr:wsDr>`);
     // Build rels for all images
@@ -398,12 +401,13 @@ async function buildQuotationPDF(props: Props) {
   // Load only raster logos so every addImage call is browser-safe.
   // w/h set to actual image aspect ratio so round logos stay round (not stretched)
   const logoFiles = [
-    { file: "nsf logo.png", fmt: "PNG",  w: 14, h: 11.7 }, // 691x577
-    { file: "ce.jpg",       fmt: "JPEG", w: 14, h: 9.9  }, // 267x188 (swapped to 2nd)
-    { file: "uaf.webp",     fmt: "WEBP", w: 14, h: 14   }, // square (swapped to 3rd)
-    { file: "images.png",   fmt: "PNG",  w: 14, h: 9.9  }, // 531x376
-    { file: "iaf.png",      fmt: "PNG",  w: 14, h: 14   }, // 600x600 square
-    // iso.png removed (same as iaf.png)
+    // All logos share the SAME height (H mm); width follows each image's aspect ratio
+    // so nothing looks stretched or unevenly sized. H = 12mm.
+    { file: "nsf logo.png", fmt: "PNG",  w: 12 * 691 / 577, h: 12 }, // 691x577
+    { file: "ce.jpg",       fmt: "JPEG", w: 12 * 267 / 188, h: 12 }, // 267x188
+    { file: "uaf.webp",     fmt: "WEBP", w: 12,             h: 12 }, // square
+    { file: "images.png",   fmt: "PNG",  w: 12 * 531 / 376, h: 12 }, // 531x376
+    { file: "iaf.png",      fmt: "PNG",  w: 12,             h: 12 }, // 600x600 square
   ];
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
