@@ -423,13 +423,17 @@ async function buildQuotationPDF(props: Props) {
 
   // Certification logos top-right — push to right edge (MR=200)
   // 5 logos: total width = sum of w + 4 gaps of 2mm each
-  const totalLogoW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * 2;
-  let lx = MR - totalLogoW; // right-align to MR=200
+  // Right-align so the LAST logo's right edge sits at the header line end (MR).
+  // Add a small overshoot so the visually-padded circular logos align flush with the line.
+  const logoGap = 3;
+  const rightEdge = MR + 2; // push slightly right to align flush with line
+  const totalLogoW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * logoGap;
+  let lx = rightEdge - totalLogoW;
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
       doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 10, logoFiles[i].w, logoFiles[i].h);
     }
-    lx += logoFiles[i].w + 2;
+    lx += logoFiles[i].w + logoGap;
   }
 
   // Horizontal line below header
