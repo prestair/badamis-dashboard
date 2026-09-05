@@ -441,9 +441,13 @@ async function buildQuotationPDF(props: Props) {
   const rightEdge = MR + 2; // push slightly right to align flush with line
   const totalLogoW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * logoGap;
   let lx = rightEdge - totalLogoW;
+  // Vertically center every logo on a common horizontal centre line so they sit
+  // on the same baseline (no "bouncing" look), regardless of individual heights.
+  const logoCenterY = 15; // mm — centre line for the logo row
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
-      doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 10, logoFiles[i].w, logoFiles[i].h);
+      const ly = logoCenterY - logoFiles[i].h / 2; // center each logo on the line
+      doc.addImage(logos[i]!, logoFiles[i].fmt, lx, ly, logoFiles[i].w, logoFiles[i].h);
     }
     lx += logoFiles[i].w + logoGap;
   }
@@ -888,20 +892,21 @@ export async function printSavedQuotation(quotation: SavedQuotation, printWindow
 // Helper: draw footer logos centered at bottom of page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function drawFooterLogos(doc: any, logos: (string | null)[], logoFiles: { file: string; fmt: string; w: number; h: number }[], W: number, ML: number, MR: number) {
-  const footerY = 274;
+  const footerCenterY = 280; // centre line for footer logo row
   const gap = 5;
   const totalW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * gap;
   let x = (W - totalW) / 2;
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
-      doc.addImage(logos[i]!, logoFiles[i].fmt, x, footerY, logoFiles[i].w, logoFiles[i].h);
+      const ly = footerCenterY - logoFiles[i].h / 2; // vertically centre each logo
+      doc.addImage(logos[i]!, logoFiles[i].fmt, x, ly, logoFiles[i].w, logoFiles[i].h);
     }
     x += logoFiles[i].w + gap;
   }
   // Thin line above logos
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.2);
-  doc.line(ML, footerY - 1.5, MR, footerY - 1.5);
+  doc.line(ML, footerCenterY - logoFiles[0].h / 2 - 1.5, MR, footerCenterY - logoFiles[0].h / 2 - 1.5);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
