@@ -58,6 +58,19 @@ function getInitials(fullName: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// Ensure the quotation number ends with "/<actorInitials>-<requesterInitials>".
+// Strips any existing trailing initials block (space or slash separated) then re-appends.
+function ensureRequesterInitials(quotationNo: string, actorName: string, requesterName: string): string {
+  const actorInit = getInitials(actorName);
+  const reqInit   = requesterName ? getRequesterInitials(requesterName) : "";
+  // Base = quotation number up to and including the numeric part (PS/YY-YY/QT-0000)
+  const m = quotationNo.match(/^(PS\/\d{2}-\d{2}\/QT-\d+)/);
+  const base = m ? m[1] : quotationNo.trim();
+  let suffix = actorInit ? "/" + actorInit : "";
+  if (reqInit) suffix += (suffix ? "-" : "/") + reqInit;
+  return `${base}${suffix}`;
+}
+
 // Format stored YYYY-MM-DD to DD/MM/YYYY for display
 function fmtDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -258,10 +271,13 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     void loadRequesterOptions();
   }, [loadItemNameOptions, loadRequesterOptions]);
 
-  // Auto-update quotation number when requester changes (new quotation only)
+  // Auto-update quotation number when requester changes.
+  // New quotation: full regenerate. Edit: keep number, just refresh the initials suffix.
   useEffect(() => {
     if (!isEdit) {
       setQuotationNo(generateQuotationNo(quotations, actorName, requester));
+    } else {
+      setQuotationNo((prev) => ensureRequesterInitials(prev, actorName, requester));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requester]);
@@ -518,8 +534,12 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
     });
 
+    // Ensure requester initials are present in quotation no even if user
+    // edited the field manually or requester was picked after generation.
+    const finalQuotationNo = ensureRequesterInitials(quotationNo, actorName, requester);
+
     const payload = {
-      quotationNo, date, partyName, partyAddress, partyGST, subject, attention, requester,
+      quotationNo: finalQuotationNo, date, partyName, partyAddress, partyGST, subject, attention, requester,
       rows: savedRows, gross: grossA, discount: totalDiscountA,
       discounts: {
         seasonal: { enabled: seasonalEnabled, amount: seasonalAmount },
