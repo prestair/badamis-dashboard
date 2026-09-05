@@ -199,12 +199,11 @@ async function downloadExcel(props: Props) {
   if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", exSpecialAmt, ts);
   if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
   if (exPctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
-    // Show (A) only when Part B enabled AND no seasonal (seasonal ke baad FINAL TOTAL aata hai)
-    const labelA = (exPartBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
-    pushT("TOTAL AFTER DISCOUNT" + labelA, exAfterDiscountA, ts);
+    const afterLabelA = (exPartBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
+    pushT("TOTAL AFTER DISCOUNT" + afterLabelA, exAfterDiscountA, ts);
   }
   if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
-  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL", exFinalTotalA, ts);
+  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL" + (exPartBEnabled ? " (A)" : ""), exFinalTotalA, ts);
 
   // Part B rows + totals in Excel
   if (exPartBEnabled && props.partBRows && props.partBRows.length > 0) {
@@ -227,11 +226,11 @@ async function downloadExcel(props: Props) {
     }
 
     // Part B totals
-    // Part B totals — agar discount 0 ho to sirf TOTAL AMOUNT dikhe, (B) label nahi
-    pushT("TOTAL AMOUNT", exGrossB, ts);
+    // Part B totals — (B) label us row par jahan se B ka amount A+B mein jaata hai
+    pushT("TOTAL AMOUNT" + (exPctB > 0 ? "" : " (B)"), exGrossB, ts);
     if (exPctB > 0) {
       pushT(`DISCOUNT ${exPctB}%`, exDiscountAmountB, ts);
-      pushT("TOTAL AFTER DISCOUNT", exAfterDiscountB, ts);
+      pushT("TOTAL AFTER DISCOUNT (B)", exAfterDiscountB, ts);
     }
     pushT("TOTAL AMOUNT (A+B)", exCombined, ts);
   }
@@ -422,9 +421,10 @@ async function buildQuotationPDF(props: Props) {
   doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 37.5);
   doc.text("India", ML, 41);
 
-  // Certification logos top-right — 6 logos × (14w + 2gap) = ~96mm
-  const logoBoxX = 104;
-  let lx = logoBoxX;
+  // Certification logos top-right — push to right edge (MR=200)
+  // 5 logos: total width = sum of w + 4 gaps of 2mm each
+  const totalLogoW = logoFiles.reduce((s, l) => s + l.w, 0) + (logoFiles.length - 1) * 2;
+  let lx = MR - totalLogoW; // right-align to MR=200
   for (let i = 0; i < logoFiles.length; i++) {
     if (logos[i]) {
       doc.addImage(logos[i]!, logoFiles[i].fmt, lx, 10, logoFiles[i].w, logoFiles[i].h);
@@ -636,11 +636,13 @@ async function buildQuotationPDF(props: Props) {
   if (props.discounts.special.enabled) partATotals.push(["SPECIAL DISCOUNT", fmtNum(specialAmt)]);
   if (props.discounts.legacyAmount > 0) partATotals.push(["DISCOUNT", fmtNum(safeNum(props.discounts.legacyAmount))]);
   if (pctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
-    const labelA = (partBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
-    partATotals.push(["TOTAL AFTER DISCOUNT" + labelA, fmtNum(afterDiscountA)]);
+    // (A) label lagta hai us row par jahan se A ka amount A+B mein jaata hai:
+    // seasonal hai -> FINAL TOTAL (A), warna TOTAL AFTER DISCOUNT (A). Only when Part B enabled.
+    const afterLabelA = (partBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
+    partATotals.push(["TOTAL AFTER DISCOUNT" + afterLabelA, fmtNum(afterDiscountA)]);
   }
   if (props.discounts.seasonal.enabled) partATotals.push(["SEASONAL DISCOUNT", fmtNum(seasonalAmt)]);
-  if (props.discounts.seasonal.enabled) partATotals.push(["FINAL TOTAL", fmtNum(finalTotalA)]);
+  if (props.discounts.seasonal.enabled) partATotals.push(["FINAL TOTAL" + (partBEnabled ? " (A)" : ""), fmtNum(finalTotalA)]);
   autoTable(doc, { startY: ty, body: partATotals, ...tStyle });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ty = ((doc as any).lastAutoTable?.finalY ?? ty + 20) + 0;
@@ -683,12 +685,13 @@ async function buildQuotationPDF(props: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ty = ((doc as any).lastAutoTable?.finalY ?? ty + 10) + 0;
 
-    // ── Part B totals ── (B) label nahi — sirf TOTAL AMOUNT / TOTAL AFTER DISCOUNT
+    // ── Part B totals ── (B) label us row par jahan se B ka amount A+B mein jaata hai
     if (ty + 15 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
-    const partBTotals: string[][] = [["TOTAL AMOUNT", fmtNum(grossBVal)]];
+    // discount hai -> TOTAL AFTER DISCOUNT (B), warna TOTAL AMOUNT (B)
+    const partBTotals: string[][] = [["TOTAL AMOUNT" + (pctB > 0 ? "" : " (B)"), fmtNum(grossBVal)]];
     if (pctB > 0) {
       partBTotals.push([`DISCOUNT ${pctB}%`, fmtNum(discountAmountB)]);
-      partBTotals.push(["TOTAL AFTER DISCOUNT", fmtNum(afterDiscountBVal)]);
+      partBTotals.push(["TOTAL AFTER DISCOUNT (B)", fmtNum(afterDiscountBVal)]);
     }
     autoTable(doc, { startY: ty, body: partBTotals, ...tStyle });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
