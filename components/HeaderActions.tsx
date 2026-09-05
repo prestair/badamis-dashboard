@@ -168,7 +168,7 @@ export default function HeaderActions() {
     const num = String(Math.max(maxNum, floor) + 1).padStart(4, "0");
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     const initials = parts.length === 0 ? "" : parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return `PS/${year}-${nextYear}/QT-${num}${initials ? " " + initials : ""}`;
+    return `PS/${year}-${nextYear}/QT-${num}${initials ? "/" + initials : ""}`;
   }
 
   async function handleImport() {

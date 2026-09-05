@@ -44,9 +44,9 @@ function generateQuotationNo(quotations: { quotationNo: string; date: string }[]
 
   const actorInitials = getInitials(fullName);
   const reqInitials = requesterName ? getRequesterInitials(requesterName) : "";
-  // Format: PS/26-27/QT-0620 PS-AB  (actor initials - requester initials)
-  let suffix = actorInitials ? " " + actorInitials : "";
-  if (reqInitials) suffix += (suffix ? "-" : " ") + reqInitials;
+  // Format: PS/26-27/QT-0620/PS-AB  (slash before actor initials, dash before requester initials)
+  let suffix = actorInitials ? "/" + actorInitials : "";
+  if (reqInitials) suffix += (suffix ? "-" : "/") + reqInitials;
   return `PS/${year}-${nextYear}/QT-${num}${suffix}`;
 }
 
