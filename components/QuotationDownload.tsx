@@ -75,8 +75,8 @@ function detectSection(itemCode: string): string {
 }
 
 const TERMS = [
-  "1. Rates: - valid for 10 days.",
-  "2. Delivery Period: - 8 WEEKS. (However, under unavoidable circumstances like natural calamities, war strikes etc., we shall not be liable for any cancellation or delay in meeting delivery date.)",
+  "1. Rates: - valid for 10 days from the date of offer.",
+  "2. Delivery Period: - 8 WEEKS from the date of advance. (However, under unavoidable circumstances like natural calamities, war strikes etc., we shall not be liable for any cancellation or delay in meeting delivery date.)",
   "3. Taxes: - G.S.T & Other taxes will be charged extra as applicable by Central Govt./State Govt. time to time.",
   "4. Transportation/Forwarding/Loading/Unloading: - Extra on actual paid by client. Client may also arrange their own vehicle for pickup.",
   "5. Way bill/Road Permit if required, to be arranged by the Client.",
@@ -199,10 +199,12 @@ async function downloadExcel(props: Props) {
   if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", exSpecialAmt, ts);
   if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
   if (exPctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
-    pushT("TOTAL AFTER DISCOUNT" + (exPartBEnabled ? " (A)" : ""), exAfterDiscountA, ts);
+    // Show (A) only when Part B enabled AND no seasonal (seasonal ke baad FINAL TOTAL aata hai)
+    const labelA = (exPartBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
+    pushT("TOTAL AFTER DISCOUNT" + labelA, exAfterDiscountA, ts);
   }
   if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
-  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL" + (exPartBEnabled ? " (A)" : ""), exFinalTotalA, ts);
+  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL", exFinalTotalA, ts);
 
   // Part B rows + totals in Excel
   if (exPartBEnabled && props.partBRows && props.partBRows.length > 0) {
@@ -225,11 +227,11 @@ async function downloadExcel(props: Props) {
     }
 
     // Part B totals
-    // Part B totals — agar discount 0 ho to sirf TOTAL AMOUNT (B) dikhe
-    pushT("TOTAL AMOUNT (B)", exGrossB, ts);
+    // Part B totals — agar discount 0 ho to sirf TOTAL AMOUNT dikhe, (B) label nahi
+    pushT("TOTAL AMOUNT", exGrossB, ts);
     if (exPctB > 0) {
       pushT(`DISCOUNT ${exPctB}%`, exDiscountAmountB, ts);
-      pushT("TOTAL AFTER DISCOUNT (B)", exAfterDiscountB, ts);
+      pushT("TOTAL AFTER DISCOUNT", exAfterDiscountB, ts);
     }
     pushT("TOTAL AMOUNT (A+B)", exCombined, ts);
   }
@@ -634,10 +636,11 @@ async function buildQuotationPDF(props: Props) {
   if (props.discounts.special.enabled) partATotals.push(["SPECIAL DISCOUNT", fmtNum(specialAmt)]);
   if (props.discounts.legacyAmount > 0) partATotals.push(["DISCOUNT", fmtNum(safeNum(props.discounts.legacyAmount))]);
   if (pctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
-    partATotals.push(["TOTAL AFTER DISCOUNT" + (partBEnabled ? " (A)" : ""), fmtNum(afterDiscountA)]);
+    const labelA = (partBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
+    partATotals.push(["TOTAL AFTER DISCOUNT" + labelA, fmtNum(afterDiscountA)]);
   }
   if (props.discounts.seasonal.enabled) partATotals.push(["SEASONAL DISCOUNT", fmtNum(seasonalAmt)]);
-  if (props.discounts.seasonal.enabled) partATotals.push(["FINAL TOTAL" + (partBEnabled ? " (A)" : ""), fmtNum(finalTotalA)]);
+  if (props.discounts.seasonal.enabled) partATotals.push(["FINAL TOTAL", fmtNum(finalTotalA)]);
   autoTable(doc, { startY: ty, body: partATotals, ...tStyle });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ty = ((doc as any).lastAutoTable?.finalY ?? ty + 20) + 0;
@@ -680,12 +683,12 @@ async function buildQuotationPDF(props: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ty = ((doc as any).lastAutoTable?.finalY ?? ty + 10) + 0;
 
-    // ── Part B totals ── agar discount 0 ho to sirf TOTAL AMOUNT (B) dikhe
+    // ── Part B totals ── (B) label nahi — sirf TOTAL AMOUNT / TOTAL AFTER DISCOUNT
     if (ty + 15 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
-    const partBTotals: string[][] = [["TOTAL AMOUNT (B)", fmtNum(grossBVal)]];
+    const partBTotals: string[][] = [["TOTAL AMOUNT", fmtNum(grossBVal)]];
     if (pctB > 0) {
       partBTotals.push([`DISCOUNT ${pctB}%`, fmtNum(discountAmountB)]);
-      partBTotals.push(["TOTAL AFTER DISCOUNT (B)", fmtNum(afterDiscountBVal)]);
+      partBTotals.push(["TOTAL AFTER DISCOUNT", fmtNum(afterDiscountBVal)]);
     }
     autoTable(doc, { startY: ty, body: partBTotals, ...tStyle });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

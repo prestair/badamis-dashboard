@@ -1249,14 +1249,15 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       </div>
                     </div>
                   )}
-                  {/* TOTAL AFTER DISCOUNT — shown when any of discount%, special, OR seasonal enabled */}
+                  {/* TOTAL AFTER DISCOUNT — (A) sirf tab jab Part B enabled ho aur seasonal nahi */}
                   {(Number(discountPercentA) > 0 || specialEnabled || seasonalEnabled) && (
                     <div className="flex items-center justify-between border-b border-slate-200 bg-orange-100 px-6 py-2 font-bold text-orange-900">
-                      <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT{partBEnabled ? " (A)" : ""}</span>
+                      <span className="text-xs font-semibold tracking-wide">
+                        TOTAL AFTER DISCOUNT{(partBEnabled && !seasonalEnabled) ? " (A)" : ""}
+                      </span>
                       <span className="font-mono font-bold">₹ {fmt(afterDiscountA)}</span>
                     </div>
                   )}
-                  {/* SEASONAL DISCOUNT — after TOTAL AFTER DISCOUNT */}
                   {seasonalEnabled && (
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-orange-50 px-6 py-2 text-orange-800">
                       <label htmlFor="seasonal-discount-amount" className="text-xs font-semibold tracking-wide">SEASONAL DISCOUNT</label>
@@ -1268,10 +1269,9 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                       </div>
                     </div>
                   )}
-                  {/* FINAL TOTAL — only shown when seasonal discount is enabled */}
                   {seasonalEnabled && (
                     <div className="flex items-center justify-between border-b border-slate-200 bg-red-100 px-6 py-2 font-bold text-red-900">
-                      <span className="text-xs font-semibold tracking-wide">FINAL TOTAL{partBEnabled ? " (A)" : ""}</span>
+                      <span className="text-xs font-semibold tracking-wide">FINAL TOTAL</span>
                       <span className="font-mono font-bold">₹ {fmt(finalTotalA)}</span>
                     </div>
                   )}
@@ -1280,7 +1280,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                   {partBEnabled && (
                     <>
                       <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-50 px-6 py-2 font-bold text-indigo-900 mt-0.5">
-                        <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT (B)</span>
+                        <span className="text-xs font-semibold tracking-wide">TOTAL AMOUNT</span>
                         <span className="font-mono font-bold">₹ {fmt(grossB)}</span>
                       </div>
                       {Number(discountPercentB) > 0 && (
@@ -1290,7 +1290,7 @@ export default function QuotationModal({ onClose, initialData }: Props) {
                             <span className="font-mono font-bold">₹ {fmt(discountAmountB)}</span>
                           </div>
                           <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-100 px-6 py-2 font-bold text-indigo-900">
-                            <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT (B)</span>
+                            <span className="text-xs font-semibold tracking-wide">TOTAL AFTER DISCOUNT</span>
                             <span className="font-mono font-bold">₹ {fmt(afterDiscountB)}</span>
                           </div>
                         </>
