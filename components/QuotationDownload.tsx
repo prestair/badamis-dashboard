@@ -298,7 +298,7 @@ async function downloadExcel(props: Props) {
     zip.file("xl/media/image1.png", logoBytes);
 
     // Load certification logos
-    const certFiles = ["nsf logo.png", "uaf.webp", "ce.jpg", "images.png", "iaf.png", "iso.png"];
+    const certFiles = ["nsf logo.png", "uaf.webp", "ce.jpg", "images.png", "iaf.png"];
     const certImages: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < certFiles.length; i++) {
       try {
@@ -387,14 +387,14 @@ async function buildQuotationPDF(props: Props) {
   }
 
   // Load only raster logos so every addImage call is browser-safe.
+  // w/h set to actual image aspect ratio so round logos stay round (not stretched)
   const logoFiles = [
-    { file: "nsf logo.png", fmt: "PNG",  w: 14, h: 14 },
-    { file: "uaf.webp",     fmt: "WEBP", w: 14, h: 14 },
-    { file: "ce.jpg",       fmt: "JPEG", w: 14, h: 14 },
-    { file: "images.png",   fmt: "PNG",  w: 14, h: 14 },
-    { file: "iaf.png",      fmt: "PNG",  w: 14, h: 14 },
-    // gacb.png removed (second last)
-    { file: "iso.png",      fmt: "PNG",  w: 14, h: 14 },
+    { file: "nsf logo.png", fmt: "PNG",  w: 14, h: 11.7 }, // 691x577
+    { file: "uaf.webp",     fmt: "WEBP", w: 14, h: 14   }, // square
+    { file: "ce.jpg",       fmt: "JPEG", w: 14, h: 9.9  }, // 267x188
+    { file: "images.png",   fmt: "PNG",  w: 14, h: 9.9  }, // 531x376
+    { file: "iaf.png",      fmt: "PNG",  w: 14, h: 14   }, // 600x600 square
+    // iso.png removed (same as iaf.png)
   ];
   const logos: (string | null)[] = [];
   for (const l of logoFiles) logos.push(await loadImg(l.file));
