@@ -366,8 +366,16 @@ async function buildQuotationPDF(props: Props) {
   const ML = 10;
   const MR = 200;
   const CW = MR - ML;
-  const PAGE_BOTTOM = 255;  // leave space for footer logos (14mm) + margin
+  // Page 1 has NO footer logos, so it can use more vertical space (~70% more of the
+  // otherwise-blank footer band). Pages 2+ reserve room for footer logos.
+  const PAGE_BOTTOM_P1 = 282;  // page 1: use almost full height (footer band free)
+  const PAGE_BOTTOM_REST = 255; // page 2+: leave space for footer logos
   const PAGE_TOP = 12;
+  // Returns the bottom limit for the CURRENT page
+  const pageBottom = () => {
+    const pn = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+    return pn === 1 ? PAGE_BOTTOM_P1 : PAGE_BOTTOM_REST;
+  };
 
   // ── Helper: load raster image as a data URL ───────────────────────────────
   async function loadImg(file: string): Promise<string | null> {
@@ -506,7 +514,9 @@ async function buildQuotationPDF(props: Props) {
 
   autoTable(doc, {
     startY: y,
-    margin: { left: ML, right: ML, bottom: 30 },
+    // Keep bottom margin safe for page 2+ footer logos (drawn later). Page 1's extra
+    // free space is used by the totals/terms logic via pageBottom().
+    margin: { left: ML, right: ML, bottom: 24 },
     head: [["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
     body: (() => {
       const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
@@ -634,7 +644,7 @@ async function buildQuotationPDF(props: Props) {
   };
 
   // ── Part A totals ──
-  if (ty + 25 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+  if (ty + 25 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
   const partATotals: string[][] = [["TOTAL AMOUNT", fmtNum(safeNum(props.gross))]];
   if (pctA > 0) partATotals.push([`DISCOUNT ${pctA}%`, fmtNum(discountAmountA)]);
   if (props.discounts.special.enabled) partATotals.push(["SPECIAL DISCOUNT", fmtNum(specialAmt)]);
@@ -656,7 +666,7 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
   if (partBEnabled && props.partBRows && props.partBRows.length > 0) {
     ty += 2;
-    if (ty + 10 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+    if (ty + 10 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(9);
     doc.setFillColor(60, 60, 120); doc.rect(ML, ty, CW, 6, "F");
     doc.setTextColor(255, 255, 255); doc.text("PART - B", ML + CW / 2, ty + 4.2, { align: "center" });
@@ -690,7 +700,7 @@ async function buildQuotationPDF(props: Props) {
     ty = ((doc as any).lastAutoTable?.finalY ?? ty + 10) + 0;
 
     // ── Part B totals ── (B) label us row par jahan se B ka amount A+B mein jaata hai
-    if (ty + 15 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+    if (ty + 15 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
     // discount hai -> TOTAL AFTER DISCOUNT (B), warna TOTAL AMOUNT (B)
     const partBTotals: string[][] = [["TOTAL AMOUNT" + (pctB > 0 ? "" : " (B)"), fmtNum(grossBVal)]];
     if (pctB > 0) {
@@ -705,7 +715,7 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
   // COMBINED TOTALS — A+B, Transport, Packing, GST, Grand Total
   // ══════════════════════════════════════════════════════════════════════════
-  if (ty + 30 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+  if (ty + 30 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
   const combinedTotals: string[][] = [];
   if (partBEnabled) combinedTotals.push(["TOTAL AMOUNT (A+B)", fmtNum(combinedAfterDiscount)]);
   combinedTotals.push(["TRANSPORTATION CHARGES", props.discounts.transportationAmount === 0 ? "As Per Actuals" : fmtNum(safeNum(props.discounts.transportationAmount))]);
@@ -722,7 +732,7 @@ async function buildQuotationPDF(props: Props) {
   // ══════════════════════════════════════════════════════════════════════════
   // TERMS & CONDITIONS — matching original style
   // ══════════════════════════════════════════════════════════════════════════
-  if (ty + 10 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+  if (ty + 10 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -741,7 +751,7 @@ async function buildQuotationPDF(props: Props) {
     doc.setFont("helvetica", isBold ? "bold" : "normal");
     const split = doc.splitTextToSize(line, CW - 4);
     const blockH = split.length * 3.6 + 1;
-    if (ty + blockH > PAGE_BOTTOM) {
+    if (ty + blockH > pageBottom()) {
       doc.addPage();
       ty = PAGE_TOP;
     }
@@ -753,7 +763,7 @@ async function buildQuotationPDF(props: Props) {
   // BANK DETAILS — matching original
   // ══════════════════════════════════════════════════════════════════════════
   ty += 6;
-  if (ty + 40 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+  if (ty + 40 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -784,7 +794,7 @@ async function buildQuotationPDF(props: Props) {
   // SIGNATURE — "For Prestair Systems LLP"
   // ══════════════════════════════════════════════════════════════════════════
   ty += 8;
-  if (ty + 20 > PAGE_BOTTOM) { doc.addPage(); ty = PAGE_TOP; }
+  if (ty + 20 > pageBottom()) { doc.addPage(); ty = PAGE_TOP; }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
