@@ -155,20 +155,23 @@ export default function HeaderActions() {
     const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
     const year = fyStartYear % 100;
     const nextYear = (fyStartYear + 1) % 100;
-    const fyPrefix = `PS/${year}-${nextYear}/QT-`;
+    const fyPrefixNew = `PS/${year}-${nextYear}/`;
+    const fyPrefixOld = `PS/${year}-${nextYear}/QT-`;
     let maxNum = 0;
     for (const q of quotations) {
       const qNo = q.quotationNo || "";
-      if (qNo.startsWith(fyPrefix)) {
-        const match = qNo.slice(fyPrefix.length).trim().match(/^(\d+)/);
-        if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
-      }
+      let afterPrefix = "";
+      if (qNo.startsWith(fyPrefixOld)) afterPrefix = qNo.slice(fyPrefixOld.length).trim();
+      else if (qNo.startsWith(fyPrefixNew)) afterPrefix = qNo.slice(fyPrefixNew.length).trim();
+      else continue;
+      const match = afterPrefix.match(/^(\d+)/);
+      if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
     }
     const floor = fyStartYear === 2026 ? 553 : 0;
     const num = String(Math.max(maxNum, floor) + 1).padStart(4, "0");
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     const initials = parts.length === 0 ? "" : parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return `PS/${year}-${nextYear}/QT-${num}${initials ? "/" + initials : ""}`;
+    return `PS/${year}-${nextYear}/${num}${initials ? "/" + initials : ""}`;
   }
 
   async function handleImport() {

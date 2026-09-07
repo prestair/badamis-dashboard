@@ -19,35 +19,36 @@ function generateQuotationNo(quotations: { quotationNo: string; date: string }[]
   const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
   const year = fyStartYear % 100;
   const nextYear = (fyStartYear + 1) % 100;
-  const fyPrefix = `PS/${year}-${nextYear}/QT-`;
+  // Match both old (PS/YY-YY/QT-0000) and new (PS/YY-YY/0000) formats for numbering
+  const fyPrefixNew = `PS/${year}-${nextYear}/`;
+  const fyPrefixOld = `PS/${year}-${nextYear}/QT-`;
 
   // Find the highest number already used in this FY
   let maxNum = 0;
   for (const q of quotations) {
     const qNo = q.quotationNo || "";
-    if (qNo.startsWith(fyPrefix)) {
-      // Extract digits after prefix, ignoring trailing initials like " MN"
-      const afterPrefix = qNo.slice(fyPrefix.length).trim();
-      const match = afterPrefix.match(/^(\d+)/);
-      if (match) {
-        const parsed = parseInt(match[1], 10);
-        if (parsed > maxNum) maxNum = parsed;
-      }
+    let afterPrefix = "";
+    if (qNo.startsWith(fyPrefixOld)) afterPrefix = qNo.slice(fyPrefixOld.length).trim();
+    else if (qNo.startsWith(fyPrefixNew)) afterPrefix = qNo.slice(fyPrefixNew.length).trim();
+    else continue;
+    const match = afterPrefix.match(/^(\d+)/);
+    if (match) {
+      const parsed = parseInt(match[1], 10);
+      if (parsed > maxNum) maxNum = parsed;
     }
   }
 
   // Floor: for FY starting 2026 (i.e. 2026-27), start at minimum 554
-  // For any future FY, start at 1
   const floor = fyStartYear === 2026 ? 553 : 0;
   const nextNum = Math.max(maxNum, floor) + 1;
   const num = String(nextNum).padStart(4, "0");
 
   const actorInitials = getInitials(fullName);
   const reqInitials = requesterName ? getRequesterInitials(requesterName) : "";
-  // Format: PS/26-27/QT-0620/PS-AB  (slash before actor initials, dash before requester initials)
+  // Format: PS/26-27/0620/PS-AB  (no QT- prefix; slash before actor, dash before requester)
   let suffix = actorInitials ? "/" + actorInitials : "";
   if (reqInitials) suffix += (suffix ? "-" : "/") + reqInitials;
-  return `PS/${year}-${nextYear}/QT-${num}${suffix}`;
+  return `PS/${year}-${nextYear}/${num}${suffix}`;
 }
 
 // Get first letter of first name and surname
@@ -63,8 +64,8 @@ function getInitials(fullName: string): string {
 function ensureRequesterInitials(quotationNo: string, actorName: string, requesterName: string): string {
   const actorInit = getInitials(actorName);
   const reqInit   = requesterName ? getRequesterInitials(requesterName) : "";
-  // Base = quotation number up to and including the numeric part (PS/YY-YY/QT-0000)
-  const m = quotationNo.match(/^(PS\/\d{2}-\d{2}\/QT-\d+)/);
+  // Base = number up to numeric part. Accept old (QT-0000) and new (0000) formats.
+  const m = quotationNo.match(/^(PS\/\d{2}-\d{2}\/(?:QT-)?\d+)/);
   const base = m ? m[1] : quotationNo.trim();
   let suffix = actorInit ? "/" + actorInit : "";
   if (reqInit) suffix += (suffix ? "-" : "/") + reqInit;

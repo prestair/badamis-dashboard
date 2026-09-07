@@ -134,7 +134,7 @@ async function downloadExcel(props: Props) {
   data.push([sc("Commercial Food Service Equipments", { font: { bold: true, sz: 8, color: { rgb: "1A3A6B" } } }), "", "", "", "", "", "", "", ""]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
   // Row 3 (index 3): Address
-  data.push([sc("B-127 Phase-2, Noida, Uttar Pradesh 201305 | GST: 09AATFP8342B1ZX", { font: { sz: 8 } }), "", "", "", "", "", "", "", ""]);
+  data.push([sc("B-127 Phase-2, Noida 201305, Uttar Pradesh | GST: 09AATFP8342B1ZX", { font: { sz: 8 } }), "", "", "", "", "", "", "", ""]);
   merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
   data.push([]); r++;
 
@@ -437,7 +437,7 @@ async function buildQuotationPDF(props: Props) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(60, 60, 60);
-  doc.text("B-127 Phase-2, Noida, Uttar Pradesh 201305", ML, 37.5);
+  doc.text("B-127 Phase-2, Noida 201305, Uttar Pradesh", ML, 37.5);
   doc.text("India", ML, 41);
 
   // Certification logos top-right — push to right edge (MR=200)
