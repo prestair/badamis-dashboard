@@ -4,13 +4,45 @@ import type { QuotationDiscounts } from "@/lib/quotationAudit";
 
 const ITEM_HEADERS = ["SL NO", "ITEM CODE", "ITEM NAME", "ADDITIONAL DESCRIPTION", "SIZE", "HSN CODE", "QTY", "RATE"];
 
+// Fetch dropdown source lists (item names + requesters) from the API
+async function fetchDropdownLists(): Promise<{ itemNames: string[]; requesters: string[] }> {
+  const itemNames: string[] = [];
+  const requesters: string[] = [];
+  try {
+    const res = await fetch("/api/quotation-item-names", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) for (const d of data) { const n = String(d.item_name ?? "").trim(); if (n) itemNames.push(n); }
+    }
+  } catch { /* ignore */ }
+  try {
+    const res = await fetch("/api/requesters", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) for (const d of data) { const n = String(d.name ?? "").trim(); if (n) requesters.push(n); }
+    }
+  } catch { /* ignore */ }
+  return { itemNames, requesters };
+}
+
+// Escape a value for XML text
+function xmlEsc(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 // ── Export blank template ─────────────────────────────────────────────────────
 export async function exportTemplate() {
   const XLSX = await import("xlsx-js-style");
   const wb = XLSX.utils.book_new();
 
+  // Load dropdown source values
+  const { itemNames, requesters } = await fetchDropdownLists();
+
   type CellVal = string | number | { v: string | number; s: object };
   const data: CellVal[][] = [];
+  // Track cell locations for data validation
+  const itemNameCells: { r: number; c: number }[] = []; // ITEM NAME column cells (col index 2)
+  let requesterCell: { r: number; c: number } | null = null;
   const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
   let r = 0;
   const sc = (v: string | number, s: object): { v: string | number; s: object } => ({ v, s });
@@ -39,7 +71,11 @@ export async function exportTemplate() {
     for (let s = 1; s <= secCount; s++) {
       data.push([sc(`${prefix} ${s} (RENAME OR DELETE)`, secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle)]);
       merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
-      for (let i = 0; i < 8; i++) { data.push(blank8()); r++; }
+      for (let i = 0; i < 8; i++) {
+        data.push(blank8());
+        itemNameCells.push({ r, c: 2 }); // ITEM NAME is column index 2
+        r++;
+      }
     }
   };
 
@@ -54,6 +90,7 @@ export async function exportTemplate() {
   data.push([sc("USER NAME:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("DATE:", labelStyle), sc("(auto: today on import)", noteStyle), "", ""]);
   merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
   data.push([sc("CLIENT NAME (M/S):", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("REQUESTER:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle)]);
+  requesterCell = { r, c: 5 }; // REQUESTER value starts at column index 5 (merged 5-7)
   merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
   data.push([sc("ADDRESS:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("GST NO.:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle)]);
   merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
@@ -102,7 +139,62 @@ export async function exportTemplate() {
   ws["!merges"] = merges;
   ws["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 28 }, { wch: 50 }, { wch: 14 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, ws, "Quotation Template");
-  XLSX.writeFile(wb, "Prestair_Quotation_Template.xlsx");
+
+  // ── Hidden "Lists" sheet with dropdown source values ──
+  const maxLen = Math.max(itemNames.length, requesters.length, 1);
+  const listData: (string | number)[][] = [["ItemNames", "Requesters"]];
+  for (let i = 0; i < maxLen; i++) {
+    listData.push([itemNames[i] ?? "", requesters[i] ?? ""]);
+  }
+  const wsList = XLSX.utils.aoa_to_sheet(listData);
+  XLSX.utils.book_append_sheet(wb, wsList, "Lists");
+
+  // If no dropdown data, just save plainly (no validation to inject)
+  if (itemNames.length === 0 && requesters.length === 0) {
+    XLSX.writeFile(wb, "Prestair_Quotation_Template.xlsx");
+    return;
+  }
+
+  // ── Inject data validation via JSZip (xlsx-js-style has no DV support) ──
+  const colLetter = (c: number) => String.fromCharCode(65 + c); // 0->A
+  const cellRef = (rr: number, cc: number) => `${colLetter(cc)}${rr + 1}`; // rr,cc 0-based -> A1
+
+  // Ranges on the Lists sheet (row 2 onwards under each header). Column A = ItemNames, B = Requesters
+  const itemListRange = itemNames.length > 0 ? `Lists!$A$2:$A$${itemNames.length + 1}` : "";
+  const reqListRange  = requesters.length > 0 ? `Lists!$B$2:$B$${requesters.length + 1}` : "";
+
+  // Build <dataValidations> for the main sheet
+  const dvEntries: string[] = [];
+  if (itemListRange && itemNameCells.length > 0) {
+    // Group all ITEM NAME cells into one validation with a space-separated sqref list
+    const sqref = itemNameCells.map((p) => cellRef(p.r, p.c)).join(" ");
+    dvEntries.push(`<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${sqref}"><formula1>${xmlEsc(itemListRange)}</formula1></dataValidation>`);
+  }
+  if (reqListRange && requesterCell) {
+    const sqref = cellRef(requesterCell.r, requesterCell.c);
+    dvEntries.push(`<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${sqref}"><formula1>${xmlEsc(reqListRange)}</formula1></dataValidation>`);
+  }
+  const dvXml = dvEntries.length > 0 ? `<dataValidations count="${dvEntries.length}">${dvEntries.join("")}</dataValidations>` : "";
+
+  const wbOut: ArrayBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  try {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(wbOut);
+    // Main sheet is sheet1.xml (first appended). Insert dataValidations before </worksheet>.
+    let sheetXml = await (zip.file("xl/worksheets/sheet1.xml")?.async("string") ?? "");
+    if (sheetXml && dvXml && !sheetXml.includes("<dataValidations")) {
+      // dataValidations must appear after sheetData and before pageMargins/etc; safest: before </worksheet>
+      sheetXml = sheetXml.replace("</worksheet>", `${dvXml}</worksheet>`);
+      zip.file("xl/worksheets/sheet1.xml", sheetXml);
+    }
+    const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "Prestair_Quotation_Template.xlsx";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  } catch {
+    // Fallback: plain save without validation
+    XLSX.writeFile(wb, "Prestair_Quotation_Template.xlsx");
+  }
 }
 
 // ── Import helpers ────────────────────────────────────────────────────────────
