@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuotations, SavedQuotation } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
+import { getRequesterInitials } from "@/components/RequesterManager";
 
 const QuotationModal     = dynamic(() => import("@/components/QuotationModal"),     { ssr: false });
 const QuotationViewModal = dynamic(() => import("@/components/QuotationViewModal"), { ssr: false });
@@ -148,7 +149,7 @@ export default function HeaderActions() {
     await exportTemplate();
   }
 
-  function generateNextQuotationNo(fullName: string): string {
+  function generateNextQuotationNo(fullName: string, requesterName = ""): string {
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
@@ -171,7 +172,10 @@ export default function HeaderActions() {
     const num = String(Math.max(maxNum, floor) + 1).padStart(4, "0");
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     const initials = parts.length === 0 ? "" : parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return `PS/${year}-${nextYear}/${num}${initials ? "/" + initials : ""}`;
+    const reqInit = requesterName ? getRequesterInitials(requesterName) : "";
+    let suffix = initials ? "/" + initials : "";
+    if (reqInit) suffix += (suffix ? "-" : "/") + reqInit;
+    return `PS/${year}-${nextYear}/${num}${suffix}`;
   }
 
   async function handleImport() {
@@ -184,7 +188,7 @@ export default function HeaderActions() {
       const today = new Date().toISOString().split("T")[0];
       const finalUser = result.userName || "Unknown";
       const finalPartyName = result.partyName || "Unknown";
-      const qNo = generateNextQuotationNo(finalUser);
+      const qNo = generateNextQuotationNo(finalUser, result.requester || "");
       const discount = result.discounts.seasonal.amount + result.discounts.special.amount;
 
       await saveQuotation({
