@@ -235,7 +235,8 @@ export async function importTemplate(file: File): Promise<ImportResult> {
     if (c0.includes("PART - B") || c0.includes("PART B")) partBBannerIdx = i;
     if (isItemHeader(row)) {
       if (partAHeaderIdx === -1) partAHeaderIdx = i;
-      else if (partBHeaderIdx === -1 && i > (partBBannerIdx > -1 ? partBBannerIdx : 999)) partBHeaderIdx = i;
+      // Part B header is the item-header row that appears AFTER the "PART - B" banner
+      else if (partBHeaderIdx === -1 && partBBannerIdx > -1 && i > partBBannerIdx) partBHeaderIdx = i;
     }
   }
   if (partAHeaderIdx === -1) throw new Error("Could not find header row (ITEM CODE / ITEM NAME).");
@@ -268,12 +269,14 @@ export async function importTemplate(file: File): Promise<ImportResult> {
   const grossB        = partBRows.reduce((s, r) => s + (r.amt ?? 0), 0);
   const partBEnabled  = partBRows.filter((r) => r.rowType === "item").length > 0;
 
+  // New rule: afterDiscountA excludes seasonal; finalTotalA = afterDiscountA - seasonal.
   const discountAmtA   = Math.round(gross * discountPercentA / 100);
-  const totalDiscountA = discountAmtA + seasonalDiscount + specialDiscount;
-  const afterDiscountA = Math.max(0, gross - totalDiscountA);
+  const afterDiscountA = Math.max(0, gross - discountAmtA - specialDiscount); // excludes seasonal
+  const finalTotalA    = Math.max(0, afterDiscountA - seasonalDiscount);       // after seasonal
+  const effectiveA     = seasonalDiscount > 0 ? finalTotalA : afterDiscountA;
   const discountAmtB   = Math.round(grossB * discountPercentB / 100);
   const afterDiscountB = Math.max(0, grossB - discountAmtB);
-  const combined       = afterDiscountA + (partBEnabled ? afterDiscountB : 0);
+  const combined       = effectiveA + (partBEnabled ? afterDiscountB : 0);
   const taxable        = combined + transportationAmt + packingAmt;
   const gst            = Math.round(taxable * 0.18);
   const grandTotal     = taxable + gst;
@@ -292,7 +295,7 @@ export async function importTemplate(file: File): Promise<ImportResult> {
 
   return {
     rows, partBRows, gross, discounts,
-    afterDiscount: afterDiscountA, gst, grandTotal,
+    afterDiscount: combined, gst, grandTotal,
     userName, partyName, partyAddress, partyGST, attention, subject, requester,
   };
 }
