@@ -317,16 +317,23 @@ async function downloadExcel(props: Props) {
     // All cert logos share the SAME height; width follows aspect ratio (same order as certFiles)
     const certAspect = [691 / 577, 267 / 188, 1, 531 / 376, 1]; // nsf, ce, uaf, images, iaf
     const certH = 60; // fixed height in px for every logo
-    const certY = emu(2);
-    const startCol = 3; // cols 3-8 = D to I (within 9-column table A-I)
     let drawingPics = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${emu(230)}" cy="${emu(65)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(230)}" cy="${emu(65)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
-    // Add cert logos positioned right-side, row 0 — each in its own column slot
+    // Add cert logos using ABSOLUTE anchors (fixed EMU coordinates) so they are
+    // evenly spaced and uniformly sized regardless of column widths — like the PDF.
+    const gapPx = 22;                 // horizontal gap between logos (px)
+    const startXpx = 430;             // left start x for the logo row (px from sheet left)
+    const centerYpx = 34;             // centre line for the logo row (px from top)
+    // Precompute widths
+    const certWidths = certImages.map((_, i) => Math.round(certH * (certAspect[i] ?? 1)));
+    let curX = startXpx;
     for (let i = 0; i < certImages.length; i++) {
-      const col = startCol + i; // one per column
       const rIdNum = i + 2;
       const cy = emu(certH);
-      const cx = emu(Math.round(certH * (certAspect[i] ?? 1))); // width from aspect ratio
-      drawingPics += `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${certY}</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+      const cx = emu(certWidths[i]);
+      const xEmu = emu(curX);
+      const yEmu = emu(Math.round(centerYpx - certH / 2)); // vertically centre each logo
+      drawingPics += `<xdr:absoluteAnchor><xdr:pos x="${xEmu}" y="${yEmu}"/><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${rIdNum + 1}" name="Cert${i + 1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${rIdNum}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:absoluteAnchor>`;
+      curX += certWidths[i] + gapPx;
     }
     zip.file("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${drawingPics}</xdr:wsDr>`);
     // Build rels for all images
