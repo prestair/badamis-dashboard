@@ -299,7 +299,7 @@ async function downloadExcel(props: Props) {
     zip.file("xl/media/image1.png", logoBytes);
 
     // Load certification logos
-    const certFiles = ["nsf logo.png", "ce.jpg", "uaf.webp", "images.png", "iaf.png"];
+    const certFiles = ["nsf logo.png", "ce.jpg", "uaf.png", "images.png", "iaf.png"];
     const certImages: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < certFiles.length; i++) {
       try {
@@ -412,7 +412,7 @@ async function buildQuotationPDF(props: Props) {
     // so nothing looks stretched or unevenly sized. H = 12mm.
     { file: "nsf logo.png", fmt: "PNG",  w: 12 * 691 / 577, h: 12 }, // 691x577
     { file: "ce.jpg",       fmt: "JPEG", w: 12 * 267 / 188, h: 12 }, // 267x188
-    { file: "uaf.webp",     fmt: "WEBP", w: 12,             h: 12 }, // square
+    { file: "uaf.png",      fmt: "PNG",  w: 12,             h: 12 }, // square (was webp; PNG for Excel/old-Excel compatibility)
     { file: "images.png",   fmt: "PNG",  w: 12 * 531 / 376, h: 12 }, // 531x376
     { file: "iaf.png",      fmt: "PNG",  w: 12,             h: 12 }, // 600x600 square
   ];
