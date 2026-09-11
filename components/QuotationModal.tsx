@@ -651,7 +651,8 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
         setSavedSerial(serial);
       }
       setSaved(true);
-      onClose();
+      // Do NOT auto-close: keep the modal open so the user can now download
+      // PDF / Excel (which are enabled only after saving). They close manually.
     } catch (e) {
       console.error("Save failed", e);
       alert("Failed to save. Please try again.");
@@ -701,12 +702,12 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
           </div>
           <div className="flex items-center gap-3">
             {saved && savedSerial && (
-              <span className="text-green-300 text-sm font-semibold animate-pulse">
-                ✅ {isEdit ? "Updated" : "Saved"} #{savedSerial}! Returning…
+              <span className="text-green-300 text-sm font-semibold">
+                ✅ {isEdit ? "Updated" : "Saved"} #{savedSerial}! Download PDF/Excel or close.
               </span>
             )}
-            {/* Download buttons — show on step 2 */}
-            {step === 2 && (
+            {/* Download buttons — show on step 2, ONLY after the quotation is saved */}
+            {step === 2 && saved && (
               <QuotationDownload
                 quotation={initialData ?? undefined}
                 partyName={partyName}
@@ -747,6 +748,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                 grossB={partBEnabled ? grossB : undefined}
                 afterDiscountB={partBEnabled ? afterDiscountB : undefined}
               />
+            )}
+            {step === 2 && !saved && (
+              <span className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-semibold text-amber-100" title="Save the quotation first to enable PDF / Excel download">
+                💾 Save first to download PDF / Excel
+              </span>
             )}
             {step === 1 ? (
               <button onClick={goToStep2}
@@ -1480,8 +1486,13 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
             {step === 1 && <span className="text-blue-600 font-semibold">Step 1 of 2 — Fill party details then click Next</span>}
           </p>
           <div className="flex gap-3 items-center flex-wrap justify-end">
-            {/* Download buttons in bottom bar on step 2 */}
-            {step === 2 && (
+            {/* Download buttons in bottom bar on step 2 — ONLY after saving */}
+            {step === 2 && !saved && (
+              <span className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] font-semibold text-amber-700" title="Save the quotation first to enable PDF / Excel download">
+                💾 Save first to download PDF / Excel
+              </span>
+            )}
+            {step === 2 && saved && (
               <QuotationDownload
                 quotation={initialData ?? undefined}
                 partyName={partyName}

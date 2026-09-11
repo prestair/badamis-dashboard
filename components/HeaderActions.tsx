@@ -42,8 +42,6 @@ export default function HeaderActions() {
   const [resumeDraftFlag,  setResumeDraftFlag]  = useState(false); // true when opening to resume a draft
   const [showItemNames,    setShowItemNames]    = useState(false);
   const [showRequesters,   setShowRequesters]   = useState(false);
-  // Draft recovery banner: detect an unsaved "new quotation" draft for this user
-  const [draftInfo, setDraftInfo] = useState<{ savedAt: string; party: string } | null>(null);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -58,52 +56,25 @@ export default function HeaderActions() {
   const newDraftKey = `prestair-draft-${draftUser}-new`;
 
 
-  // Whether the user has explicitly dismissed the banner this session (ref = survives re-renders)
-  const draftHandledRef = useRef(false);
-
-  const readDraft = useCallback((): { savedAt: string; party: string } | null => {
-    if (typeof window === "undefined" || !loggedUser) return null;
+  // Auto-open the quotation modal with the saved draft ONCE per session, as soon
+  // as the user is logged in and an unsaved draft exists. No banner, no cancel.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !loggedUser) return;
+    if (autoOpenedRef.current) return;
     try {
       const raw = localStorage.getItem(newDraftKey);
-      if (!raw) return null;
+      if (!raw) return;
       const d = JSON.parse(raw);
       const hasItems = Array.isArray(d.itemRows) && d.itemRows.some((r: { rowType?: string; desc?: string; itemCode?: string }) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
       const hasParty = d.partyName && String(d.partyName).trim();
-      if (!hasItems && !hasParty) return null;
-      return {
-        savedAt: d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier",
-        party: hasParty ? String(d.partyName).trim() : "Untitled",
-      };
-    } catch { return null; }
-  }, [newDraftKey, loggedUser]);
-
-  // Poll for the draft continuously. As long as a draft exists on disk AND the user
-  // hasn't acted, the banner stays visible — immune to any re-render/loading state.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const tick = () => {
-      if (draftHandledRef.current) return;        // user resumed/discarded — stop
-      const info = readDraft();
-      // Only update state when the value actually changes (avoid needless renders)
-      setDraftInfo((prev) => {
-        if (!info) return prev; // never auto-hide; keep showing until user acts
-        if (prev && prev.savedAt === info.savedAt && prev.party === info.party) return prev;
-        return info;
-      });
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [readDraft]);
-
-  // When the create modal closes, if the draft was saved/removed, hide the banner.
-  useEffect(() => {
-    if (showCreate) return;
-    if (typeof window === "undefined" || !loggedUser) return;
-    try {
-      if (!localStorage.getItem(newDraftKey)) { setDraftInfo(null); draftHandledRef.current = false; }
-    } catch { /* */ }
-  }, [showCreate, newDraftKey, loggedUser]);
+      if (!hasItems && !hasParty) return;
+      // A meaningful draft exists → open it automatically
+      autoOpenedRef.current = true;
+      setResumeDraftFlag(true);
+      setShowCreate(true);
+    } catch { /* ignore */ }
+  }, [loggedUser, newDraftKey]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state
@@ -586,39 +557,6 @@ export default function HeaderActions() {
           </>
         )}
       </div>
-
-      {/* ── Draft recovery banner — stays until user acts (Resume/Discard) ── */}
-      {draftInfo && !showCreate && (
-        <div className="mx-auto mb-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2 text-sm text-amber-800">
-            <span className="text-lg">💾</span>
-            <span>
-              You have an <strong>unsaved quotation draft</strong> ({draftInfo.party}) from <strong>{draftInfo.savedAt}</strong>.
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { setResumeDraftFlag(true); setShowCreate(true); }}
-              className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700 active:scale-95"
-            >
-              Resume Draft
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!window.confirm("Discard this unsaved draft? This cannot be undone.")) return;
-                draftHandledRef.current = true;
-                try { localStorage.removeItem(newDraftKey); } catch { /* */ }
-                setDraftInfo(null);
-              }}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-            >
-              Discard
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Modals ── */}
       {showCreate     && <QuotationModal onClose={() => { setShowCreate(false); setResumeDraftFlag(false); }} resumeDraft={resumeDraftFlag} />}
