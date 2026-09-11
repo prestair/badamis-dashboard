@@ -75,9 +75,16 @@ export default function HeaderActions() {
     } catch { setDraftInfo(null); }
   }, [newDraftKey, loggedUser]);
 
-  // Check once on mount, and again each time the create modal closes (draft may be cleared on save)
+  // Check on mount, when the create modal closes, and re-check shortly after login
+  // (session/user may not be ready on the very first render).
   useEffect(() => { checkDraft(); }, [checkDraft]);
   useEffect(() => { if (!showCreate) checkDraft(); }, [showCreate, checkDraft]);
+  useEffect(() => {
+    // Re-check a couple of times after mount to survive session-restore timing
+    const t1 = window.setTimeout(checkDraft, 500);
+    const t2 = window.setTimeout(checkDraft, 1500);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+  }, [checkDraft]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state

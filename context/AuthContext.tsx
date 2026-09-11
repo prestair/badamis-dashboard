@@ -141,12 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (u) => u.active && u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
     );
     if (u) {
-      setIsLoggedIn(true);
-      setLoggedUser(u.username);
-      setLoggedRole(u.role);
+      // Persist session first so a reload can restore it
       try { sessionStorage.setItem("prestair-session", JSON.stringify({ username: u.username, role: u.role })); } catch { /* */ }
 
-      // Hard refresh on first login of the day to ensure fresh app version
+      // Hard refresh on first login of the day to ensure fresh app version.
+      // Do this BEFORE setting React state so the dashboard (and draft banner)
+      // render only ONCE after reload — no flash/disappear.
       try {
         const todayKey = `prestair-last-refresh-${u.username}`;
         const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -154,9 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (lastRefresh !== today) {
           localStorage.setItem(todayKey, today);
           window.location.reload();
+          return true; // stop here; page is reloading
         }
       } catch { /* ignore if localStorage unavailable */ }
 
+      setIsLoggedIn(true);
+      setLoggedUser(u.username);
+      setLoggedRole(u.role);
       return true;
     }
     return false;
