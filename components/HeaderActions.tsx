@@ -15,7 +15,7 @@ type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
 
 export default function HeaderActions() {
-  const { loggedRole } = useAuth();
+  const { loggedRole, loggedUser } = useAuth();
 
   // Format stored YYYY-MM-DD to DD/MM/YYYY
   function fmtDate(dateStr: string): string {
@@ -41,6 +41,8 @@ export default function HeaderActions() {
   const [showCreate,       setShowCreate]       = useState(false);
   const [showItemNames,    setShowItemNames]    = useState(false);
   const [showRequesters,   setShowRequesters]   = useState(false);
+  // Draft recovery banner: detect an unsaved "new quotation" draft for this user
+  const [draftInfo, setDraftInfo] = useState<{ savedAt: string; party: string } | null>(null);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -49,6 +51,27 @@ export default function HeaderActions() {
   const [printingId,     setPrintingId]     = useState<string | null>(null);
 
   const totalGrand = filteredQuotations.reduce((sum, quotation) => sum + quotation.grandTotal, 0);
+
+  // Detect an unsaved "new quotation" draft for the logged-in user (power-loss recovery)
+  const draftUser = (loggedUser || "guest").toLowerCase();
+  const newDraftKey = `prestair-draft-${draftUser}-new`;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Re-check whenever the create modal closes (draft may have been cleared on save)
+    try {
+      const raw = localStorage.getItem(newDraftKey);
+      if (!raw) { setDraftInfo(null); return; }
+      const d = JSON.parse(raw);
+      // Only show if there is meaningful content (party name or at least one item with a name)
+      const hasItems = Array.isArray(d.itemRows) && d.itemRows.some((r: { rowType?: string; desc?: string; itemCode?: string }) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
+      const hasParty = d.partyName && String(d.partyName).trim();
+      if (!hasItems && !hasParty) { setDraftInfo(null); return; }
+      setDraftInfo({
+        savedAt: d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier",
+        party: hasParty ? String(d.partyName).trim() : "Untitled",
+      });
+    } catch { setDraftInfo(null); }
+  }, [newDraftKey, showCreate]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state
@@ -531,6 +554,34 @@ export default function HeaderActions() {
           </>
         )}
       </div>
+
+      {/* ── Draft recovery banner ── */}
+      {draftInfo && !showCreate && (
+        <div className="mx-auto mb-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <span className="text-lg">💾</span>
+            <span>
+              You have an <strong>unsaved quotation draft</strong> ({draftInfo.party}) from <strong>{draftInfo.savedAt}</strong>.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700 active:scale-95"
+            >
+              Resume Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => { try { localStorage.removeItem(newDraftKey); } catch { /* */ } setDraftInfo(null); }}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Modals ── */}
       {showCreate     && <QuotationModal onClose={() => setShowCreate(false)} />}
