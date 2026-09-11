@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useQuotations, SavedQuotation } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -55,14 +55,16 @@ export default function HeaderActions() {
   // Detect an unsaved "new quotation" draft for the logged-in user (power-loss recovery)
   const draftUser = (loggedUser || "guest").toLowerCase();
   const newDraftKey = `prestair-draft-${draftUser}-new`;
-  useEffect(() => {
+  // Once the user acts (Resume/Discard) OR opens the create modal, stop re-showing.
+  const [draftDismissed, setDraftDismissed] = useState(false);
+
+  const checkDraft = useCallback(() => {
     if (typeof window === "undefined") return;
-    // Re-check whenever the create modal closes (draft may have been cleared on save)
+    if (!loggedUser) return; // wait until the session is restored so the key matches
     try {
       const raw = localStorage.getItem(newDraftKey);
       if (!raw) { setDraftInfo(null); return; }
       const d = JSON.parse(raw);
-      // Only show if there is meaningful content (party name or at least one item with a name)
       const hasItems = Array.isArray(d.itemRows) && d.itemRows.some((r: { rowType?: string; desc?: string; itemCode?: string }) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
       const hasParty = d.partyName && String(d.partyName).trim();
       if (!hasItems && !hasParty) { setDraftInfo(null); return; }
@@ -71,7 +73,11 @@ export default function HeaderActions() {
         party: hasParty ? String(d.partyName).trim() : "Untitled",
       });
     } catch { setDraftInfo(null); }
-  }, [newDraftKey, showCreate]);
+  }, [newDraftKey, loggedUser]);
+
+  // Check once on mount, and again each time the create modal closes (draft may be cleared on save)
+  useEffect(() => { checkDraft(); }, [checkDraft]);
+  useEffect(() => { if (!showCreate) checkDraft(); }, [showCreate, checkDraft]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state
@@ -555,8 +561,8 @@ export default function HeaderActions() {
         )}
       </div>
 
-      {/* ── Draft recovery banner ── */}
-      {draftInfo && !showCreate && (
+      {/* ── Draft recovery banner — stays until user acts (Resume/Discard) ── */}
+      {draftInfo && !showCreate && !draftDismissed && (
         <div className="mx-auto mb-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-amber-800">
             <span className="text-lg">💾</span>
@@ -567,14 +573,14 @@ export default function HeaderActions() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowCreate(true)}
+              onClick={() => { setDraftDismissed(true); setShowCreate(true); }}
               className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700 active:scale-95"
             >
               Resume Draft
             </button>
             <button
               type="button"
-              onClick={() => { try { localStorage.removeItem(newDraftKey); } catch { /* */ } setDraftInfo(null); }}
+              onClick={() => { try { localStorage.removeItem(newDraftKey); } catch { /* */ } setDraftInfo(null); setDraftDismissed(true); }}
               className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
             >
               Discard
