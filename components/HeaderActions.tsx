@@ -55,36 +55,46 @@ export default function HeaderActions() {
   // Detect an unsaved "new quotation" draft for the logged-in user (power-loss recovery)
   const draftUser = (loggedUser || "guest").toLowerCase();
   const newDraftKey = `prestair-draft-${draftUser}-new`;
-  // Once the user acts (Resume/Discard) OR opens the create modal, stop re-showing.
-  const [draftDismissed, setDraftDismissed] = useState(false);
 
+
+  // checkDraft only ever SETS the banner (never auto-clears it on re-render).
+  // The banner is cleared only by the user (Resume/Discard) or after a successful save.
   const checkDraft = useCallback(() => {
     if (typeof window === "undefined") return;
     if (!loggedUser) return; // wait until the session is restored so the key matches
     try {
       const raw = localStorage.getItem(newDraftKey);
-      if (!raw) { setDraftInfo(null); return; }
+      if (!raw) return; // no draft — do NOT clear an already-shown banner here
       const d = JSON.parse(raw);
       const hasItems = Array.isArray(d.itemRows) && d.itemRows.some((r: { rowType?: string; desc?: string; itemCode?: string }) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
       const hasParty = d.partyName && String(d.partyName).trim();
-      if (!hasItems && !hasParty) { setDraftInfo(null); return; }
+      if (!hasItems && !hasParty) return;
       setDraftInfo({
         savedAt: d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier",
         party: hasParty ? String(d.partyName).trim() : "Untitled",
       });
-    } catch { setDraftInfo(null); }
+    } catch { /* ignore */ }
   }, [newDraftKey, loggedUser]);
 
-  // Check on mount, when the create modal closes, and re-check shortly after login
-  // (session/user may not be ready on the very first render).
-  useEffect(() => { checkDraft(); }, [checkDraft]);
-  useEffect(() => { if (!showCreate) checkDraft(); }, [showCreate, checkDraft]);
+  // After the create modal closes, re-check whether the draft still exists (cleared on save).
+  const clearBannerIfNoDraft = useCallback(() => {
+    if (typeof window === "undefined" || !loggedUser) return;
+    try {
+      const raw = localStorage.getItem(newDraftKey);
+      if (!raw) setDraftInfo(null);
+    } catch { /* */ }
+  }, [newDraftKey, loggedUser]);
+
+  // Check on mount + a few times after login (session-restore timing), never auto-hides.
   useEffect(() => {
-    // Re-check a couple of times after mount to survive session-restore timing
-    const t1 = window.setTimeout(checkDraft, 500);
-    const t2 = window.setTimeout(checkDraft, 1500);
-    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+    checkDraft();
+    const t1 = window.setTimeout(checkDraft, 400);
+    const t2 = window.setTimeout(checkDraft, 1200);
+    const t3 = window.setTimeout(checkDraft, 2500);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
   }, [checkDraft]);
+  // When modal closes, if draft got saved (removed), hide the banner.
+  useEffect(() => { if (!showCreate) clearBannerIfNoDraft(); }, [showCreate, clearBannerIfNoDraft]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state
@@ -569,7 +579,7 @@ export default function HeaderActions() {
       </div>
 
       {/* ── Draft recovery banner — stays until user acts (Resume/Discard) ── */}
-      {draftInfo && !showCreate && !draftDismissed && (
+      {draftInfo && !showCreate && (
         <div className="mx-auto mb-3 flex max-w-5xl items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-amber-800">
             <span className="text-lg">💾</span>
@@ -580,14 +590,18 @@ export default function HeaderActions() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => { setDraftDismissed(true); setShowCreate(true); }}
+              onClick={() => setShowCreate(true)}
               className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700 active:scale-95"
             >
               Resume Draft
             </button>
             <button
               type="button"
-              onClick={() => { try { localStorage.removeItem(newDraftKey); } catch { /* */ } setDraftInfo(null); setDraftDismissed(true); }}
+              onClick={() => {
+                if (!window.confirm("Discard this unsaved draft? This cannot be undone.")) return;
+                try { localStorage.removeItem(newDraftKey); } catch { /* */ }
+                setDraftInfo(null);
+              }}
               className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
             >
               Discard
