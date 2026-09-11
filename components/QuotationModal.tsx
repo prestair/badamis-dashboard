@@ -292,6 +292,84 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
 
+  // ── AUTO-SAVE DRAFT (localStorage) ──────────────────────────────────────────
+  // Draft key: new quotation vs edit (per dbId). Survives power loss / app close.
+  const draftKey = isEdit ? `prestair-draft-edit-${initialData?.dbId}` : "prestair-draft-new";
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // On mount: if a saved draft exists, ask the user to restore it
+  useEffect(() => {
+    if (draftRestored) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) { setDraftRestored(true); return; }
+      const d = JSON.parse(raw);
+      const savedWhen = d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier";
+      const ok = window.confirm(
+        `An unsaved draft from ${savedWhen} was found for this quotation.\n\nClick OK to restore it, or Cancel to start fresh.`
+      );
+      if (ok) {
+        if (d.date !== undefined) setDate(d.date);
+        if (d.partyName !== undefined) setPartyName(d.partyName);
+        if (d.partyAddress !== undefined) setPartyAddress(d.partyAddress);
+        if (d.partyGST !== undefined) setPartyGST(d.partyGST);
+        if (d.attention !== undefined) setAttention(d.attention);
+        if (d.quotationNo !== undefined) setQuotationNo(d.quotationNo);
+        if (d.subject !== undefined) setSubject(d.subject);
+        if (d.requester !== undefined) setRequester(d.requester);
+        if (d.seasonalEnabled !== undefined) setSeasonalEnabled(d.seasonalEnabled);
+        if (d.seasonalDiscount !== undefined) setSeasonalDiscount(d.seasonalDiscount);
+        if (d.specialEnabled !== undefined) setSpecialEnabled(d.specialEnabled);
+        if (d.specialDiscount !== undefined) setSpecialDiscount(d.specialDiscount);
+        if (d.transportationCharges !== undefined) setTransportationCharges(d.transportationCharges);
+        if (d.packingCharges !== undefined) setPackingCharges(d.packingCharges);
+        if (d.discountPercentA !== undefined) setDiscountPercentA(d.discountPercentA);
+        if (d.discountAEnabled !== undefined) setDiscountAEnabled(d.discountAEnabled);
+        if (d.partBEnabled !== undefined) setPartBEnabled(d.partBEnabled);
+        if (d.discountPercentB !== undefined) setDiscountPercentB(d.discountPercentB);
+        if (d.discountBEnabled !== undefined) setDiscountBEnabled(d.discountBEnabled);
+        if (d.gstEnabled !== undefined) setGstEnabled(d.gstEnabled);
+        if (Array.isArray(d.itemRows)) setItemRows(d.itemRows);
+        if (Array.isArray(d.partBItemRows)) setPartBItemRows(d.partBItemRows);
+        if (d.step === 1 || d.step === 2) setStep(d.step);
+      } else {
+        localStorage.removeItem(draftKey);
+      }
+    } catch { /* ignore corrupt draft */ }
+    setDraftRestored(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Continuously persist the draft whenever any field changes (instant auto-save).
+  useEffect(() => {
+    if (!draftRestored) return; // don't overwrite before restore decision
+    if (saved) return;          // don't save after a successful final save
+    try {
+      const draft = {
+        __savedAt: new Date().toISOString(),
+        step, date, partyName, partyAddress, partyGST, attention, quotationNo, subject, requester,
+        seasonalEnabled, seasonalDiscount, specialEnabled, specialDiscount,
+        transportationCharges, packingCharges,
+        discountPercentA, discountAEnabled, partBEnabled, discountPercentB, discountBEnabled, gstEnabled,
+        itemRows, partBItemRows,
+      };
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch { /* storage full / unavailable */ }
+  }, [
+    draftRestored, saved, step, date, partyName, partyAddress, partyGST, attention, quotationNo, subject, requester,
+    seasonalEnabled, seasonalDiscount, specialEnabled, specialDiscount,
+    transportationCharges, packingCharges,
+    discountPercentA, discountAEnabled, partBEnabled, discountPercentB, discountBEnabled, gstEnabled,
+    itemRows, partBItemRows, draftKey,
+  ]);
+
+  // Clear the draft once the quotation is successfully saved
+  useEffect(() => {
+    if (saved) {
+      try { localStorage.removeItem(draftKey); } catch { /* */ }
+    }
+  }, [saved, draftKey]);
+
   // ── Row helpers ────────────────────────────────────────────────────────────
   function updateItemRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
     setItemRows((prev) =>
@@ -607,6 +685,11 @@ export default function QuotationModal({ onClose, initialData }: Props) {
               <span className="text-blue-200 text-xs ml-1">
                 {step === 1 ? "Party Details" : "Item Entries"}
               </span>
+              {!saved && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-200" title="Your work is auto-saved locally. Safe even if power goes out.">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-400" /> Auto-save on
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
