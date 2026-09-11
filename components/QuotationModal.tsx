@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuotations, SavedQuotation, SavedRowState } from "@/context/QuotationContext";
 import { useAuth } from "@/context/AuthContext";
 import { PrestairBrandHeader } from "@/components/PrestairLogo";
@@ -283,18 +283,19 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requester]);
 
-  // close on Escape
+  // close on Escape (intentional discard → clears draft via handleCloseRef)
   useEffect(() => {
     const fn = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleCloseRef.current();
     };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [onClose]);
+  }, []);
 
   // ── AUTO-SAVE DRAFT (localStorage) ──────────────────────────────────────────
   // Draft key includes the logged-in user so that even on a SHARED PC each user
   // sees only their own draft. Survives power loss / app close.
+  const handleCloseRef = useRef<() => void>(() => {});
   const draftUser = (loggedUser || "guest").toLowerCase();
   const draftKey = isEdit
     ? `prestair-draft-${draftUser}-edit-${initialData?.dbId}`
@@ -659,6 +660,16 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
     }
   }
 
+  // Closing via Cancel / ✕ / backdrop / Escape is an INTENTIONAL discard:
+  // remove the local draft so it does not auto-open next time. (Power-loss/crash
+  // never calls this, so those drafts survive as intended.)
+  function handleClose() {
+    try { localStorage.removeItem(draftKey); } catch { /* */ }
+    onClose();
+  }
+  // Keep a ref so the Escape listener always calls the latest handler.
+  handleCloseRef.current = handleClose;
+
   const inp = (err?: string) =>
     `border rounded px-2 py-1.5 text-xs w-full focus:outline-none focus:ring-1 bg-white text-slate-800 ${
       err ? "border-red-400 focus:ring-red-300" : "border-slate-300 focus:ring-blue-300"
@@ -666,7 +677,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={handleClose} />
       <div role="dialog" aria-modal="true"
         className="fixed inset-2 sm:inset-3 z-50 flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden">
 
@@ -771,7 +782,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                 </button>
               </>
             )}
-            <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+            <button onClick={handleClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
           </div>
         </div>
 
@@ -1534,7 +1545,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                 afterDiscountB={partBEnabled ? afterDiscountB : undefined}
               />
             )}
-            <button onClick={onClose}
+            <button onClick={handleClose}
               className="px-5 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors">
               Cancel
             </button>
