@@ -57,44 +57,52 @@ export default function HeaderActions() {
   const newDraftKey = `prestair-draft-${draftUser}-new`;
 
 
-  // checkDraft only ever SETS the banner (never auto-clears it on re-render).
-  // The banner is cleared only by the user (Resume/Discard) or after a successful save.
-  const checkDraft = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (!loggedUser) return; // wait until the session is restored so the key matches
+  // Whether the user has explicitly dismissed the banner this session (ref = survives re-renders)
+  const draftHandledRef = useRef(false);
+
+  const readDraft = useCallback((): { savedAt: string; party: string } | null => {
+    if (typeof window === "undefined" || !loggedUser) return null;
     try {
       const raw = localStorage.getItem(newDraftKey);
-      if (!raw) return; // no draft — do NOT clear an already-shown banner here
+      if (!raw) return null;
       const d = JSON.parse(raw);
       const hasItems = Array.isArray(d.itemRows) && d.itemRows.some((r: { rowType?: string; desc?: string; itemCode?: string }) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
       const hasParty = d.partyName && String(d.partyName).trim();
-      if (!hasItems && !hasParty) return;
-      setDraftInfo({
+      if (!hasItems && !hasParty) return null;
+      return {
         savedAt: d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier",
         party: hasParty ? String(d.partyName).trim() : "Untitled",
-      });
-    } catch { /* ignore */ }
+      };
+    } catch { return null; }
   }, [newDraftKey, loggedUser]);
 
-  // After the create modal closes, re-check whether the draft still exists (cleared on save).
-  const clearBannerIfNoDraft = useCallback(() => {
+  // Poll for the draft continuously. As long as a draft exists on disk AND the user
+  // hasn't acted, the banner stays visible — immune to any re-render/loading state.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tick = () => {
+      if (draftHandledRef.current) return;        // user resumed/discarded — stop
+      const info = readDraft();
+      // Only update state when the value actually changes (avoid needless renders)
+      setDraftInfo((prev) => {
+        if (!info) return prev; // never auto-hide; keep showing until user acts
+        if (prev && prev.savedAt === info.savedAt && prev.party === info.party) return prev;
+        return info;
+      });
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [readDraft]);
+
+  // When the create modal closes, if the draft was saved/removed, hide the banner.
+  useEffect(() => {
+    if (showCreate) return;
     if (typeof window === "undefined" || !loggedUser) return;
     try {
-      const raw = localStorage.getItem(newDraftKey);
-      if (!raw) setDraftInfo(null);
+      if (!localStorage.getItem(newDraftKey)) { setDraftInfo(null); draftHandledRef.current = false; }
     } catch { /* */ }
-  }, [newDraftKey, loggedUser]);
-
-  // Check on mount + a few times after login (session-restore timing), never auto-hides.
-  useEffect(() => {
-    checkDraft();
-    const t1 = window.setTimeout(checkDraft, 400);
-    const t2 = window.setTimeout(checkDraft, 1200);
-    const t3 = window.setTimeout(checkDraft, 2500);
-    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
-  }, [checkDraft]);
-  // When modal closes, if draft got saved (removed), hide the banner.
-  useEffect(() => { if (!showCreate) clearBannerIfNoDraft(); }, [showCreate, clearBannerIfNoDraft]);
+  }, [showCreate, newDraftKey, loggedUser]);
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   // Import template state
@@ -599,6 +607,7 @@ export default function HeaderActions() {
               type="button"
               onClick={() => {
                 if (!window.confirm("Discard this unsaved draft? This cannot be undone.")) return;
+                draftHandledRef.current = true;
                 try { localStorage.removeItem(newDraftKey); } catch { /* */ }
                 setDraftInfo(null);
               }}
