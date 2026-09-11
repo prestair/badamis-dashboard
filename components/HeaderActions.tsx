@@ -39,6 +39,7 @@ export default function HeaderActions() {
     setDateTo,
   } = useQuotations();
   const [showCreate,       setShowCreate]       = useState(false);
+  const [resumeDraftFlag,  setResumeDraftFlag]  = useState(false); // true when opening to resume a draft
   const [showItemNames,    setShowItemNames]    = useState(false);
   const [showRequesters,   setShowRequesters]   = useState(false);
   // Draft recovery banner: detect an unsaved "new quotation" draft for this user
@@ -290,7 +291,7 @@ export default function HeaderActions() {
           )}
         </div>
         {/* Create New */}
-        <button onClick={() => setShowCreate(true)}
+        <button onClick={() => { setResumeDraftFlag(false); setShowCreate(true); }}
           className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 active:scale-95 transition-all shadow-md">
           <span className="text-base leading-none">+</span> Create New
         </button>
@@ -598,7 +599,7 @@ export default function HeaderActions() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowCreate(true)}
+              onClick={() => { setResumeDraftFlag(true); setShowCreate(true); }}
               className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700 active:scale-95"
             >
               Resume Draft
@@ -620,7 +621,7 @@ export default function HeaderActions() {
       )}
 
       {/* ── Modals ── */}
-      {showCreate     && <QuotationModal onClose={() => setShowCreate(false)} />}
+      {showCreate     && <QuotationModal onClose={() => { setShowCreate(false); setResumeDraftFlag(false); }} resumeDraft={resumeDraftFlag} />}
       {showItemNames  && <ItemNameManager onClose={() => setShowItemNames(false)} />}
       {showRequesters && <RequesterManager onClose={() => setShowRequesters(false)} />}
       {editQuotation  && <QuotationModal onClose={() => setEditQuotation(null)} initialData={editQuotation} />}

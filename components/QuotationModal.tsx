@@ -105,7 +105,7 @@ type ItemRow = {
   rate:     string;
 };
 
-type Props = { onClose: () => void; initialData?: SavedQuotation | null };
+type Props = { onClose: () => void; initialData?: SavedQuotation | null; resumeDraft?: boolean };
 
 let uidCounter = 1;
 function newUid() { return `row-${uidCounter++}`; }
@@ -159,7 +159,7 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
   });
 }
 
-export default function QuotationModal({ onClose, initialData }: Props) {
+export default function QuotationModal({ onClose, initialData, resumeDraft = false }: Props) {
   const { saveQuotation, updateQuotation, quotations } = useQuotations();
   const { loggedUser, loggedRole, users } = useAuth();
   const actorName = users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
@@ -301,44 +301,42 @@ export default function QuotationModal({ onClose, initialData }: Props) {
     : `prestair-draft-${draftUser}-new`;
   const [draftRestored, setDraftRestored] = useState(false);
 
-  // On mount: if a saved draft exists, ask the user to restore it
+  // On mount: if a saved draft exists, restore it automatically (no prompt).
+  // For NEW quotations the dashboard banner already asked the user to resume,
+  // so we just load it. We NEVER delete the draft here — only a successful
+  // save (or the dashboard "Discard" button) removes it.
   useEffect(() => {
     if (draftRestored) return;
+    // Only auto-restore when editing OR when the dashboard explicitly asked to resume.
+    // A plain "Create New" starts fresh and must NOT touch the existing draft.
+    if (!isEdit && !resumeDraft) { setDraftRestored(true); return; }
     try {
       const raw = localStorage.getItem(draftKey);
       if (!raw) { setDraftRestored(true); return; }
       const d = JSON.parse(raw);
-      const savedWhen = d.__savedAt ? new Date(d.__savedAt).toLocaleString("en-IN") : "earlier";
-      const ok = window.confirm(
-        `An unsaved draft from ${savedWhen} was found for this quotation.\n\nClick OK to restore it, or Cancel to start fresh.`
-      );
-      if (ok) {
-        if (d.date !== undefined) setDate(d.date);
-        if (d.partyName !== undefined) setPartyName(d.partyName);
-        if (d.partyAddress !== undefined) setPartyAddress(d.partyAddress);
-        if (d.partyGST !== undefined) setPartyGST(d.partyGST);
-        if (d.attention !== undefined) setAttention(d.attention);
-        if (d.quotationNo !== undefined) setQuotationNo(d.quotationNo);
-        if (d.subject !== undefined) setSubject(d.subject);
-        if (d.requester !== undefined) setRequester(d.requester);
-        if (d.seasonalEnabled !== undefined) setSeasonalEnabled(d.seasonalEnabled);
-        if (d.seasonalDiscount !== undefined) setSeasonalDiscount(d.seasonalDiscount);
-        if (d.specialEnabled !== undefined) setSpecialEnabled(d.specialEnabled);
-        if (d.specialDiscount !== undefined) setSpecialDiscount(d.specialDiscount);
-        if (d.transportationCharges !== undefined) setTransportationCharges(d.transportationCharges);
-        if (d.packingCharges !== undefined) setPackingCharges(d.packingCharges);
-        if (d.discountPercentA !== undefined) setDiscountPercentA(d.discountPercentA);
-        if (d.discountAEnabled !== undefined) setDiscountAEnabled(d.discountAEnabled);
-        if (d.partBEnabled !== undefined) setPartBEnabled(d.partBEnabled);
-        if (d.discountPercentB !== undefined) setDiscountPercentB(d.discountPercentB);
-        if (d.discountBEnabled !== undefined) setDiscountBEnabled(d.discountBEnabled);
-        if (d.gstEnabled !== undefined) setGstEnabled(d.gstEnabled);
-        if (Array.isArray(d.itemRows)) setItemRows(d.itemRows);
-        if (Array.isArray(d.partBItemRows)) setPartBItemRows(d.partBItemRows);
-        if (d.step === 1 || d.step === 2) setStep(d.step);
-      } else {
-        localStorage.removeItem(draftKey);
-      }
+      if (d.date !== undefined) setDate(d.date);
+      if (d.partyName !== undefined) setPartyName(d.partyName);
+      if (d.partyAddress !== undefined) setPartyAddress(d.partyAddress);
+      if (d.partyGST !== undefined) setPartyGST(d.partyGST);
+      if (d.attention !== undefined) setAttention(d.attention);
+      if (d.quotationNo !== undefined) setQuotationNo(d.quotationNo);
+      if (d.subject !== undefined) setSubject(d.subject);
+      if (d.requester !== undefined) setRequester(d.requester);
+      if (d.seasonalEnabled !== undefined) setSeasonalEnabled(d.seasonalEnabled);
+      if (d.seasonalDiscount !== undefined) setSeasonalDiscount(d.seasonalDiscount);
+      if (d.specialEnabled !== undefined) setSpecialEnabled(d.specialEnabled);
+      if (d.specialDiscount !== undefined) setSpecialDiscount(d.specialDiscount);
+      if (d.transportationCharges !== undefined) setTransportationCharges(d.transportationCharges);
+      if (d.packingCharges !== undefined) setPackingCharges(d.packingCharges);
+      if (d.discountPercentA !== undefined) setDiscountPercentA(d.discountPercentA);
+      if (d.discountAEnabled !== undefined) setDiscountAEnabled(d.discountAEnabled);
+      if (d.partBEnabled !== undefined) setPartBEnabled(d.partBEnabled);
+      if (d.discountPercentB !== undefined) setDiscountPercentB(d.discountPercentB);
+      if (d.discountBEnabled !== undefined) setDiscountBEnabled(d.discountBEnabled);
+      if (d.gstEnabled !== undefined) setGstEnabled(d.gstEnabled);
+      if (Array.isArray(d.itemRows)) setItemRows(d.itemRows);
+      if (Array.isArray(d.partBItemRows)) setPartBItemRows(d.partBItemRows);
+      if (d.step === 1 || d.step === 2) setStep(d.step);
     } catch { /* ignore corrupt draft */ }
     setDraftRestored(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,6 +346,11 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   useEffect(() => {
     if (!draftRestored) return; // don't overwrite before restore decision
     if (saved) return;          // don't save after a successful final save
+    // Only write a draft when there is meaningful content — prevents a blank
+    // "Create New" screen from overwriting/erasing an existing saved draft.
+    const hasParty = !!partyName.trim();
+    const hasItem = itemRows.some((r) => r.rowType === "item" && ((r.desc && r.desc.trim()) || (r.itemCode && r.itemCode.trim())));
+    if (!isEdit && !hasParty && !hasItem) return;
     try {
       const draft = {
         __savedAt: new Date().toISOString(),
