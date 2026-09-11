@@ -293,8 +293,12 @@ export default function QuotationModal({ onClose, initialData }: Props) {
   }, [onClose]);
 
   // ── AUTO-SAVE DRAFT (localStorage) ──────────────────────────────────────────
-  // Draft key: new quotation vs edit (per dbId). Survives power loss / app close.
-  const draftKey = isEdit ? `prestair-draft-edit-${initialData?.dbId}` : "prestair-draft-new";
+  // Draft key includes the logged-in user so that even on a SHARED PC each user
+  // sees only their own draft. Survives power loss / app close.
+  const draftUser = (loggedUser || "guest").toLowerCase();
+  const draftKey = isEdit
+    ? `prestair-draft-${draftUser}-edit-${initialData?.dbId}`
+    : `prestair-draft-${draftUser}-new`;
   const [draftRestored, setDraftRestored] = useState(false);
 
   // On mount: if a saved draft exists, ask the user to restore it
