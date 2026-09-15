@@ -10,6 +10,7 @@ const QuotationModal     = dynamic(() => import("@/components/QuotationModal"), 
 const QuotationViewModal = dynamic(() => import("@/components/QuotationViewModal"), { ssr: false });
 const ItemNameManager    = dynamic(() => import("@/components/ItemNameManager"),    { ssr: false });
 const RequesterManager   = dynamic(() => import("@/components/RequesterManager"),   { ssr: false });
+const HsnManager         = dynamic(() => import("@/components/HsnManager"),         { ssr: false });
 
 type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
@@ -42,6 +43,7 @@ export default function HeaderActions() {
   const [resumeDraftFlag,  setResumeDraftFlag]  = useState(false); // true when opening to resume a draft
   const [showItemNames,    setShowItemNames]    = useState(false);
   const [showRequesters,   setShowRequesters]   = useState(false);
+  const [showHsn,          setShowHsn]          = useState(false);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -284,6 +286,14 @@ export default function HeaderActions() {
             Requester
           </button>
         )}
+        {/* HSN Codes — available to all logged-in users (add/edit); delete is admin-only */}
+        <button
+          type="button"
+          onClick={() => setShowHsn(true)}
+          className="flex items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-700 shadow-sm transition-all hover:bg-amber-100 active:scale-95"
+        >
+          HSN Codes
+        </button>
         {/* Refresh + Search on same line */}
         <button
           type="button"
@@ -562,6 +572,7 @@ export default function HeaderActions() {
       {showCreate     && <QuotationModal onClose={() => { setShowCreate(false); setResumeDraftFlag(false); }} resumeDraft={resumeDraftFlag} />}
       {showItemNames  && <ItemNameManager onClose={() => setShowItemNames(false)} />}
       {showRequesters && <RequesterManager onClose={() => setShowRequesters(false)} />}
+      {showHsn        && <HsnManager onClose={() => setShowHsn(false)} />}
       {editQuotation  && <QuotationModal onClose={() => setEditQuotation(null)} initialData={editQuotation} />}
       {viewQuotation  && (
         <QuotationViewModal

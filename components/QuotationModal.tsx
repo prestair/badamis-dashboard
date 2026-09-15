@@ -244,6 +244,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   });
   const [itemNameOptions, setItemNameOptions] = useState<QuotationItemName[]>([]);
   const [itemNameLoadError, setItemNameLoadError] = useState("");
+  const [hsnOptions, setHsnOptions] = useState<{ id: string; code: string; description: string }[]>([]);
   const [saved,       setSaved]       = useState(false);
   const [savedSerial, setSavedSerial] = useState<number | null>(null);
 
@@ -267,10 +268,19 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
     } catch { /* silent - requester dropdown stays empty */ }
   }, []);
 
+  const loadHsnOptions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/hsn-codes", { cache: "no-store" });
+      const data = await res.json();
+      setHsnOptions(Array.isArray(data) ? data : []);
+    } catch { /* silent - HSN dropdown stays empty */ }
+  }, []);
+
   useEffect(() => {
     void loadItemNameOptions();
     void loadRequesterOptions();
-  }, [loadItemNameOptions, loadRequesterOptions]);
+    void loadHsnOptions();
+  }, [loadItemNameOptions, loadRequesterOptions, loadHsnOptions]);
 
   // Auto-update quotation number when the user CHANGES the requester.
   // IMPORTANT: skip while a draft/edit is being restored — otherwise the restored
@@ -1018,6 +1028,12 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                     <option key={entry.id} value={entry.item_name} />
                   ))}
                 </datalist>
+                {/* HSN code searchable dropdown source */}
+                <datalist id="quotation-hsn-options">
+                  {hsnOptions.map((h) => (
+                    <option key={h.id} value={h.code}>{h.description ? `${h.code} — ${h.description}` : h.code}</option>
+                  ))}
+                </datalist>
                 {itemNameLoadError && (
                   <p role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
                     Item Name autofill is unavailable: {itemNameLoadError}
@@ -1126,9 +1142,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
                             </td>
 
-                            {/* HSN CODE */}
+                            {/* HSN CODE — searchable dropdown from HSN table */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.hsn}
+                                list="quotation-hsn-options"
+                                autoComplete="off"
                                 onChange={(e) => updateItemRow(row.uid,"hsn",e.target.value)}
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-center text-black" />
                             </td>
@@ -1292,7 +1310,8 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
                                 </td>
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input value={row.hsn} onChange={(e) => updatePartBRow(row.uid,"hsn",e.target.value)}
+                                  <input value={row.hsn} list="quotation-hsn-options" autoComplete="off"
+                                    onChange={(e) => updatePartBRow(row.uid,"hsn",e.target.value)}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-mono text-center text-black" />
                                 </td>
                                 <td className="border border-slate-100 px-1 py-1">
