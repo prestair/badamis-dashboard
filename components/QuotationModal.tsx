@@ -272,11 +272,22 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
     void loadRequesterOptions();
   }, [loadItemNameOptions, loadRequesterOptions]);
 
-  // Auto-update quotation number when requester changes.
-  // New quotation: full regenerate. Edit: keep number, just refresh the initials suffix.
+  // Auto-update quotation number when the user CHANGES the requester.
+  // IMPORTANT: skip while a draft/edit is being restored — otherwise the restored
+  // number (e.g. a copied quotation's number) gets wrongly regenerated to 0554.
+  // We only regenerate the number on a genuine user-driven requester change.
+  const requesterInitRef = useRef(true);
   useEffect(() => {
+    // First run after mount = initial value (from draft/copy/edit). Don't regenerate.
+    if (requesterInitRef.current) { requesterInitRef.current = false; return; }
+    // Don't touch the number until the draft-restore decision is settled.
+    if (!draftRestored) return;
     if (!isEdit) {
-      setQuotationNo(generateQuotationNo(quotations, actorName, requester));
+      // Only regenerate the numeric part when there is no restored number yet.
+      // Preserve an existing number and just refresh the initials suffix.
+      setQuotationNo((prev) => prev && prev.trim()
+        ? ensureRequesterInitials(prev, actorName, requester)
+        : generateQuotationNo(quotations, actorName, requester));
     } else {
       setQuotationNo((prev) => ensureRequesterInitials(prev, actorName, requester));
     }
