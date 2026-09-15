@@ -137,8 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Login ──────────────────────────────────────────────────────────────────
   function login(username: string, password: string): boolean {
+    // Username AND password are matched case-insensitively (trimmed).
     const u = users.find(
-      (u) => u.active && u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+      (u) => u.active
+        && u.username.toLowerCase() === username.trim().toLowerCase()
+        && u.password.toLowerCase() === password.trim().toLowerCase()
     );
     if (u) {
       // Persist session so a scheduled reload can restore it

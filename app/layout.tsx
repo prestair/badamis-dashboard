@@ -6,6 +6,7 @@ import { QuotationProvider } from "@/context/QuotationContext";
 import AuthGuard from "@/components/AuthGuard";
 import PwaInstall from "@/components/PwaInstall";
 import ScheduledRefresh from "@/components/ScheduledRefresh";
+import EnterAsTab from "@/components/EnterAsTab";
 
 export const metadata: Metadata = {
   title: "Prestair Systems – Quotation Dashboard",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </AuthGuard>
           <PwaInstall />
           <ScheduledRefresh />
+          <EnterAsTab />
         </AuthProvider>
       </body>
     </html>

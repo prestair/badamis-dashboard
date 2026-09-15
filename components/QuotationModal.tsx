@@ -807,7 +807,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                 {/* Company branding */}
                 <PrestairBrandHeader />
 
-                <div className="p-5 space-y-4" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") { e.preventDefault(); const form = e.currentTarget; const focusable = Array.from(form.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])')); const idx = focusable.indexOf(document.activeElement as HTMLElement); if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus(); } }}>
+                <div className="p-5 space-y-4">
 
                   {/* ── Row 1: Party Name | Date + Quotation No ── */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
