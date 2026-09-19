@@ -160,7 +160,7 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
 }
 
 export default function QuotationModal({ onClose, initialData, resumeDraft = false }: Props) {
-  const { saveQuotation, updateQuotation, quotations } = useQuotations();
+  const { saveQuotationFull, updateQuotation, quotations } = useQuotations();
   const { loggedUser, loggedRole, users } = useAuth();
   const actorName = users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
   const isEdit = !!initialData?.dbId;
@@ -247,6 +247,10 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   const [hsnOptions, setHsnOptions] = useState<{ id: string; code: string; description: string }[]>([]);
   const [saved,       setSaved]       = useState(false);
   const [savedSerial, setSavedSerial] = useState<number | null>(null);
+  // Once a NEW quotation is saved, remember its dbId so further saves UPDATE it
+  // (prevents creating duplicate copies on repeated clicks).
+  const [savedDbId,   setSavedDbId]   = useState<string | null>(null);
+  const [saving,      setSaving]      = useState(false);
 
   const loadItemNameOptions = useCallback(async () => {
     try {
@@ -664,13 +668,19 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
       partBRows: partBEnabled ? savedPartBRows : undefined,
     };
 
+    if (saving) return; // guard against rapid double-clicks
+    setSaving(true);
     try {
-      if (isEdit && initialData) {
-        await updateQuotation(initialData.dbId, payload, actorName);
-        setSavedSerial(initialData.serialNo);
+      // Which existing record to update? Either an edit, or a NEW one we already saved once.
+      const existingDbId = (isEdit && initialData) ? initialData.dbId : savedDbId;
+      if (existingDbId) {
+        await updateQuotation(existingDbId, payload, actorName);
+        if (isEdit && initialData) setSavedSerial(initialData.serialNo);
       } else {
-        const serial = await saveQuotation(payload, actorName);
-        setSavedSerial(serial);
+        // First save of a brand-new quotation → create it, then remember its id
+        const created = await saveQuotationFull(payload, actorName);
+        setSavedSerial(created.serialNo);
+        setSavedDbId(created.dbId);
       }
       setSaved(true);
       // Do NOT auto-close: keep the modal open so the user can now download
@@ -678,6 +688,8 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
     } catch (e) {
       console.error("Save failed", e);
       alert("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -797,9 +809,9 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                   className="px-4 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-bold transition-all">
                   ← Back
                 </button>
-                <button onClick={handleSave}
-                  className="px-4 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold transition-all active:scale-95">
-                  💾 {isEdit ? "Update" : "Save"}
+                <button onClick={handleSave} disabled={saving}
+                  className="px-4 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {saving ? "Saving…" : `💾 ${(isEdit || savedDbId) ? "Update Quotation" : "Save"}`}
                 </button>
               </>
             )}
@@ -1587,10 +1599,10 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
               </button>
             )}
             {step === 2 && (
-              <button onClick={handleSave}
-                className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
+              <button onClick={handleSave} disabled={saving}
+                className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ background:"linear-gradient(135deg,#059669,#16a34a)" }}>
-                💾 {isEdit ? "Update Quotation" : "Save Quotation"}
+                {saving ? "Saving…" : `💾 ${(isEdit || savedDbId) ? "Update Quotation" : "Save Quotation"}`}
               </button>
             )}
           </div>

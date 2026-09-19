@@ -68,6 +68,7 @@ type QuotationContextValue = {
   filteredQuotations: SavedQuotation[];
   loading:            boolean;
   saveQuotation:      (q: QuotationInput, actorName: string) => Promise<number>;
+  saveQuotationFull:  (q: QuotationInput, actorName: string) => Promise<SavedQuotation>;
   updateQuotation:    (dbId: string, q: QuotationInput, actorName: string) => Promise<void>;
   deleteQuotation:    (dbId: string) => Promise<void>;
   totalCount:         number;
@@ -248,10 +249,11 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   // ── save new quotation ─────────────────────────────────────────────────────
-  async function saveQuotation(
+  // Create a new quotation and return the FULL saved record (id + serial etc.)
+  async function saveQuotationFull(
     q: QuotationInput,
     actorName: string
-  ): Promise<number> {
+  ): Promise<SavedQuotation> {
     const res  = await fetch("/api/quotations", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -261,6 +263,15 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error(data.error ?? "Save failed");
     const saved = mapRow(data);
     setQuotations((prev) => [saved, ...prev]);
+    return saved;
+  }
+
+  // Backward-compatible wrapper returning just the serial number
+  async function saveQuotation(
+    q: QuotationInput,
+    actorName: string
+  ): Promise<number> {
+    const saved = await saveQuotationFull(q, actorName);
     return saved.serialNo;
   }
 
@@ -324,6 +335,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
         filteredQuotations,
         loading,
         saveQuotation,
+        saveQuotationFull,
         updateQuotation,
         deleteQuotation,
         totalCount: quotations.length,
