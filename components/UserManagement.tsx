@@ -522,8 +522,8 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                   <div>
                     <h3 className="text-base font-bold text-slate-800">Delete Edit History Before Date</h3>
                     <p className="text-sm text-slate-500 mt-1">
-                      Har quotation ki edit history mein se selected date se <strong>pehle</strong> ki saari entries permanently delete ho jaayengi.
-                      Quotation ka koi bhi data (party, items, totals) bilkul touch nahi hoga.
+                      All edit history entries <strong>before</strong> the selected date will be permanently deleted from every quotation.
+                      No quotation data (party, items, rates, totals) will be changed.
                     </p>
                   </div>
                 </div>
@@ -584,8 +584,8 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
 
                 {trimConfirm && trimDate && (
                   <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    ⚠️ <strong>{trimDate}</strong> se pehle ki saari edit history entries permanently delete ho jaayengi.<br />
-                    <span className="text-xs mt-1 block text-red-500">Quotation ka actual data (party name, items, rates, totals) bilkul safe rahega — sirf audit log entries delete hongi.</span>
+                    ⚠️ All edit history entries before <strong>{trimDate}</strong> will be permanently deleted.<br />
+                    <span className="text-xs mt-1 block text-red-500">Quotation data (party name, items, rates, totals) will remain completely unchanged — only audit log entries will be removed.</span>
                   </div>
                 )}
 
@@ -594,8 +594,8 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                     <p className="font-semibold">✅ Edit history cleanup complete</p>
                     <p className="text-xs text-green-600">
                       {trimResult.trimmed === 0
-                        ? `Kisi bhi quotation mein us date se pehle ki history nahi mili — kuch delete nahi hua.`
-                        : `${trimResult.trimmed} quotation${trimResult.trimmed > 1 ? "s" : ""} ki purani audit log entries delete hui. Baaki ${trimResult.total - trimResult.trimmed} mein ya toh history thi hi nahi ya sab entries newer hain. Quotation data unchanged hai.`
+                        ? `No history entries older than that date were found — nothing was deleted.`
+                        : `Old audit log entries removed from ${trimResult.trimmed} quotation${trimResult.trimmed > 1 ? "s" : ""}. The remaining ${trimResult.total - trimResult.trimmed} had no old entries. All quotation data is unchanged.`
                       }
                     </p>
                   </div>
