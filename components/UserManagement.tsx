@@ -178,8 +178,23 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
   const [trimConfirm, setTrimConfirm]   = useState(false);
   const [trimResult, setTrimResult]     = useState<{ trimmed: number; total: number } | null>(null);
 
+  // Convert DD/MM/YYYY display → YYYY-MM-DD for API
+  function displayToIso(display: string): string {
+    const [d, m, y] = display.split("/");
+    if (!d || !m || !y || y.length !== 4) return "";
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // Convert YYYY-MM-DD → DD/MM/YYYY for display
+  function isoToDisplay(iso: string): string {
+    const [y, m, d] = iso.split("-");
+    if (!y || !m || !d) return iso;
+    return `${d}/${m}/${y}`;
+  }
+
   async function handleTrimHistory() {
-    if (!trimDate) { showNotice("Please select a date first.", true); return; }
+    const isoDate = displayToIso(trimDate);
+    if (!isoDate) { showNotice("Please enter a valid date (DD/MM/YYYY).", true); return; }
     if (!trimConfirm) { setTrimConfirm(true); return; }
 
     setTrimLoading(true);
@@ -188,12 +203,11 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
       const res = await fetch("/api/quotations/trim-history", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-user-role": "admin" },
-        body: JSON.stringify({ beforeDate: trimDate }),
+        body: JSON.stringify({ beforeDate: isoDate }),
       });
       const data = await res.json();
       if (!res.ok) { showNotice(data.error ?? "Trim failed.", true); return; }
       setTrimResult(data);
-      showNotice(`Done — edit history trimmed in ${data.trimmed} of ${data.total} quotations.`);
       setTrimDate("");
     } catch {
       showNotice("Network error. Please retry.", true);
@@ -517,14 +531,26 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <label htmlFor="trim-date" className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Delete history before
+                      Delete history before (DD/MM/YYYY)
                     </label>
                     <input
                       id="trim-date"
-                      type="date"
+                      type="text"
                       value={trimDate}
-                      onChange={(e) => { setTrimDate(e.target.value); setTrimConfirm(false); setTrimResult(null); }}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                      onChange={(e) => {
+                        let v = e.target.value.replace(/[^\d/]/g, "");
+                        // Auto-insert slashes
+                        if (v.length === 2 && trimDate.length === 1) v = v + "/";
+                        if (v.length === 5 && trimDate.length === 4) v = v + "/";
+                        if (v.length <= 10) {
+                          setTrimDate(v);
+                          setTrimConfirm(false);
+                          setTrimResult(null);
+                        }
+                      }}
+                      placeholder="DD/MM/YYYY"
+                      maxLength={10}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-orange-300 w-36"
                     />
                   </div>
 
@@ -541,7 +567,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                     {trimLoading
                       ? "Deleting…"
                       : trimConfirm
-                      ? "⚠️ Confirm — Permanently Delete"
+                      ? "⚠️ Confirm Delete"
                       : "Delete Old History"}
                   </button>
 
@@ -557,14 +583,21 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {trimConfirm && trimDate && (
-                  <p className="mt-3 text-sm font-semibold text-red-700">
-                    ⚠️ Yeh action undo nahi hoga. {trimDate} se pehle ki <strong>saari edit history</strong> permanently delete ho jaayegi.
-                  </p>
+                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    ⚠️ <strong>{trimDate}</strong> se pehle ki saari edit history entries permanently delete ho jaayengi.<br />
+                    <span className="text-xs mt-1 block text-red-500">Quotation ka actual data (party name, items, rates, totals) bilkul safe rahega — sirf audit log entries delete hongi.</span>
+                  </div>
                 )}
 
                 {trimResult && !trimLoading && (
-                  <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                    ✅ Completed — <strong>{trimResult.trimmed}</strong> quotations updated out of {trimResult.total} total.
+                  <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 space-y-1">
+                    <p className="font-semibold">✅ Edit history cleanup complete</p>
+                    <p className="text-xs text-green-600">
+                      {trimResult.trimmed === 0
+                        ? `Kisi bhi quotation mein us date se pehle ki history nahi mili — kuch delete nahi hua.`
+                        : `${trimResult.trimmed} quotation${trimResult.trimmed > 1 ? "s" : ""} ki purani audit log entries delete hui. Baaki ${trimResult.total - trimResult.trimmed} mein ya toh history thi hi nahi ya sab entries newer hain. Quotation data unchanged hai.`
+                      }
+                    </p>
                   </div>
                 )}
               </div>
