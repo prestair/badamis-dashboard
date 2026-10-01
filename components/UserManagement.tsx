@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAuth, UserRole } from "@/context/AuthContext";
 
-type Tab = "users" | "add";
+type Tab = "users" | "add" | "maintenance";
 type Notice = { text: string; error: boolean };
 
 const focusableSelector = [
@@ -172,6 +172,36 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
 
   const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300";
 
+  // ── Maintenance state ──────────────────────────────────────────────────────
+  const [trimDate, setTrimDate]         = useState("");
+  const [trimLoading, setTrimLoading]   = useState(false);
+  const [trimConfirm, setTrimConfirm]   = useState(false);
+  const [trimResult, setTrimResult]     = useState<{ trimmed: number; total: number } | null>(null);
+
+  async function handleTrimHistory() {
+    if (!trimDate) { showNotice("Please select a date first.", true); return; }
+    if (!trimConfirm) { setTrimConfirm(true); return; }
+
+    setTrimLoading(true);
+    setTrimConfirm(false);
+    try {
+      const res = await fetch("/api/quotations/trim-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-role": "admin" },
+        body: JSON.stringify({ beforeDate: trimDate }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showNotice(data.error ?? "Trim failed.", true); return; }
+      setTrimResult(data);
+      showNotice(`Done — edit history trimmed in ${data.trimmed} of ${data.total} quotations.`);
+      setTrimDate("");
+    } catch {
+      showNotice("Network error. Please retry.", true);
+    } finally {
+      setTrimLoading(false);
+    }
+  }
+
   const shell = loggedRole !== "admin" ? (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
@@ -224,7 +254,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex flex-shrink-0 border-b border-slate-200" role="tablist" aria-label="User management sections">
-          {(["users", "add"] as Tab[]).map((item) => (
+          {(["users", "add", "maintenance"] as Tab[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -236,7 +266,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                 tab === item ? "border-b-2 border-blue-600 text-blue-700" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              {item === "users" ? `All Users (${users.length})` : "Add User"}
+              {item === "users" ? `All Users (${users.length})` : item === "add" ? "Add User" : "🛠 Maintenance"}
             </button>
           ))}
         </div>
@@ -465,6 +495,80 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={handleAdd} className="mt-5 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow hover:bg-blue-700 active:scale-[0.99]">
                 Create User
               </button>
+            </section>
+          )}
+
+          {tab === "maintenance" && (
+            <section id="user-management-maintenance-panel" role="tabpanel" className="mx-auto max-w-2xl space-y-6">
+
+              {/* ── Trim Edit History ── */}
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 sm:p-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <span className="text-2xl">🗑️</span>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800">Delete Edit History Before Date</h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Har quotation ki edit history mein se selected date se <strong>pehle</strong> ki saari entries permanently delete ho jaayengi.
+                      Quotation ka koi bhi data (party, items, totals) bilkul touch nahi hoga.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label htmlFor="trim-date" className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Delete history before
+                    </label>
+                    <input
+                      id="trim-date"
+                      type="date"
+                      value={trimDate}
+                      onChange={(e) => { setTrimDate(e.target.value); setTrimConfirm(false); setTrimResult(null); }}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleTrimHistory}
+                    disabled={trimLoading || !trimDate}
+                    className={`rounded-xl px-5 py-2 text-sm font-bold text-white shadow transition-all disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 ${
+                      trimConfirm
+                        ? "bg-red-600 hover:bg-red-700 animate-pulse"
+                        : "bg-orange-600 hover:bg-orange-700"
+                    }`}
+                  >
+                    {trimLoading
+                      ? "Deleting…"
+                      : trimConfirm
+                      ? "⚠️ Confirm — Permanently Delete"
+                      : "Delete Old History"}
+                  </button>
+
+                  {trimConfirm && (
+                    <button
+                      type="button"
+                      onClick={() => setTrimConfirm(false)}
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+
+                {trimConfirm && trimDate && (
+                  <p className="mt-3 text-sm font-semibold text-red-700">
+                    ⚠️ Yeh action undo nahi hoga. {trimDate} se pehle ki <strong>saari edit history</strong> permanently delete ho jaayegi.
+                  </p>
+                )}
+
+                {trimResult && !trimLoading && (
+                  <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    ✅ Completed — <strong>{trimResult.trimmed}</strong> quotations updated out of {trimResult.total} total.
+                  </div>
+                )}
+              </div>
+
             </section>
           )}
         </div>
