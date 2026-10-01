@@ -30,7 +30,7 @@ const focusableSelector = [
 export default function LoginActivityAdmin({ onClose }: { onClose: () => void }) {
   const { loggedRole } = useAuth();
   const [records, setRecords] = useState<LoginActivityRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -73,11 +73,21 @@ export default function LoginActivityAdmin({ onClose }: { onClose: () => void })
 
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (loggedRole !== "admin") return;
-    loadRecords();
+    // Wait until role is resolved — load as soon as admin is confirmed
+    if (loggedRole === "admin") {
+      loadRecords();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedRole]);
 
+  // Also load immediately on mount if role is already known
+  useEffect(() => {
+    if (loggedRole === "admin") loadRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadRecords() {
+    setLoading(true);
     try {
       const res = await fetch("/api/login-activity", {
         headers: { "x-user-role": "admin" },
