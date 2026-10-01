@@ -28,6 +28,7 @@ export type LoginGpsPayload = {
   longitude?:  number;
   gpsAccuracy?: number;
   gpsError?:   string;
+  city?:       string;
 };
 
 type AuthContextValue = {

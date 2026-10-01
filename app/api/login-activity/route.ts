@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await admin
       .from("login_activity")
-      .select("id, username, logged_in_at, ip_address, device_info, latitude, longitude, gps_accuracy, gps_error")
+      .select("id, username, logged_in_at, ip_address, device_info, latitude, longitude, gps_accuracy, gps_error, city")
       .order("logged_in_at", { ascending: false })
       .limit(500);
 
@@ -74,6 +74,7 @@ export async function POST(req: Request) {
       longitude:   typeof body.longitude === "number" ? body.longitude : null,
       gps_accuracy: typeof body.gpsAccuracy === "number" ? body.gpsAccuracy : null,
       gps_error:   typeof body.gpsError === "string" ? body.gpsError : null,
+      city:        typeof body.city === "string" ? body.city : null,
     };
 
     const { error } = await admin.from("login_activity").insert([record]);
