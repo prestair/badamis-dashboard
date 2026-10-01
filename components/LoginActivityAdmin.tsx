@@ -4,6 +4,43 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
 
+// ── Reverse geocode: coords → city name (used for old rows where city is NULL) ─
+function CityFetcher({ lat, lng, accuracy }: { lat: number; lng: number; accuracy: number | null }) {
+  const [city, setCity] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+      headers: { "Accept-Language": "en" },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const a = data.address ?? {};
+        const c = a.city || a.town || a.village || a.county || a.state_district || a.state || "";
+        const s = a.state || "";
+        setCity(c && s && c !== s ? `${c}, ${s}` : c || s || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      })
+      .catch(() => setCity(`${lat.toFixed(4)}, ${lng.toFixed(4)}`));
+  }, [lat, lng]);
+
+  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const accuracyText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
+
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-semibold text-slate-700">
+        {city ? `📍 ${city}${accuracyText}` : <span className="text-slate-400 animate-pulse">Fetching city…</span>}
+      </div>
+      <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+        </svg>
+        View on Map
+      </a>
+    </div>
+  );
+}
+
 type LoginActivityRecord = {
   id:           string;
   username:     string;
@@ -153,9 +190,12 @@ export default function LoginActivityAdmin({ onClose }: { onClose: () => void })
 
   function formatLocation(lat: number | null, lng: number | null, accuracy: number | null, error: string | null, city: string | null) {
     if (error) return <span className="text-amber-600 text-xs">Error: {error}</span>;
+
+    const googleMapsUrl = lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+    const accuracyText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
+
+    // City available (new logins)
     if (city) {
-      const accuracyText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
-      const googleMapsUrl = lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : null;
       return (
         <div className="space-y-1">
           <div className="text-xs font-semibold text-slate-700">📍 {city}{accuracyText}</div>
@@ -171,20 +211,12 @@ export default function LoginActivityAdmin({ onClose }: { onClose: () => void })
         </div>
       );
     }
+
+    // No GPS at all
     if (lat === null || lng === null) return <span className="text-slate-400 text-xs">No GPS</span>;
-    const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-    return (
-      <div className="space-y-1">
-        <div className="text-xs text-slate-600 font-mono">{lat.toFixed(5)}, {lng.toFixed(5)}</div>
-        <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-          </svg>
-          View on Map
-        </a>
-      </div>
-    );
+
+    // Old logins — city null but coords available: show CityFetcher
+    return <CityFetcher lat={lat} lng={lng} accuracy={accuracy} />;
   }
 
   // ── Delete record ─────────────────────────────────────────────────────────
