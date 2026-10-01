@@ -36,6 +36,7 @@ function toRow(
     after_discount: body.afterDiscount,
     gst:            body.gst,
     grand_total:    body.grandTotal,
+    status:         body.status ?? "active",
   };
 }
 

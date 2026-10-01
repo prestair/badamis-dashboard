@@ -47,6 +47,7 @@ export type SavedQuotation = {
   afterDiscount:number;
   gst:          number;
   grandTotal:   number;
+  status:       "active" | "completed";
   savedAt:      string;
   createdBy:    string;
   createdAt:    string;
@@ -60,8 +61,11 @@ export type SavedQuotation = {
 type QuotationInput = Omit<
   SavedQuotation,
   "dbId" | "serialNo" | "savedAt" | "createdBy" | "createdAt" |
-  "editedBy" | "editCount" | "editHistory"
->;
+  "editedBy" | "editCount" | "editHistory" | "status"
+> & {
+  // status is optional here; callers that don't set it default to "active"
+  status?: "active" | "completed";
+};
 
 type QuotationContextValue = {
   quotations:         SavedQuotation[];
@@ -71,6 +75,7 @@ type QuotationContextValue = {
   saveQuotationFull:  (q: QuotationInput, actorName: string) => Promise<SavedQuotation>;
   updateQuotation:    (dbId: string, q: QuotationInput, actorName: string) => Promise<void>;
   deleteQuotation:    (dbId: string) => Promise<void>;
+  toggleQuotationStatus: (dbId: string, newStatus: "active" | "completed", actorName: string) => Promise<void>;
   totalCount:         number;
   currentFYCount:     number;
   searchQuery:        string;
@@ -149,6 +154,7 @@ function mapRow(r: any): SavedQuotation {
     afterDiscount:Number(r.after_discount)|| 0,
     gst:          Number(r.gst)           || 0,
     grandTotal:   Number(r.grand_total)   || 0,
+    status:       r.status === "completed" ? "completed" : "active",
     savedAt:      r.saved_at      ?? "",
     createdBy:    audit.createdBy,
     createdAt:    audit.createdAt || r.saved_at || "",
@@ -185,6 +191,7 @@ function toPayload(
     afterDiscount: q.afterDiscount,
     gst:           q.gst,
     grandTotal:    q.grandTotal,
+    status:        q.status ?? "active",
     actorName,
     previousAudit,
     changes,
@@ -328,6 +335,38 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     setQuotations((prev) => prev.filter((q) => q.dbId !== dbId));
   }
 
+  // ── toggle status ─────────────────────────────────────────────────────────
+  async function toggleQuotationStatus(
+    dbId: string,
+    newStatus: "active" | "completed",
+    actorName: string
+  ): Promise<void> {
+    const existing = quotations.find((quotation) => quotation.dbId === dbId);
+    if (!existing) throw new Error("Quotation not found.");
+
+    const updatedQuotation: QuotationInput = {
+      quotationNo: existing.quotationNo,
+      date: existing.date,
+      partyName: existing.partyName,
+      partyAddress: existing.partyAddress,
+      partyGST: existing.partyGST,
+      subject: existing.subject,
+      attention: existing.attention,
+      requester: existing.requester,
+      rows: existing.rows,
+      gross: existing.gross,
+      discount: existing.discount,
+      discounts: existing.discounts,
+      afterDiscount: existing.afterDiscount,
+      gst: existing.gst,
+      grandTotal: existing.grandTotal,
+      status: newStatus,
+      partBRows: existing.partBRows,
+    };
+
+    await updateQuotation(dbId, updatedQuotation, actorName);
+  }
+
   return (
     <QuotationContext.Provider
       value={{
@@ -338,6 +377,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
         saveQuotationFull,
         updateQuotation,
         deleteQuotation,
+        toggleQuotationStatus,
         totalCount: quotations.length,
         currentFYCount: (() => {
           const now = new Date();

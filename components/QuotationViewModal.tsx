@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { SavedQuotation } from "@/context/QuotationContext";
+import { SavedQuotation, useQuotations } from "@/context/QuotationContext";
+import { useAuth } from "@/context/AuthContext";
 import dynamic from "next/dynamic";
 
 const QuotationDownload = dynamic(() => import("@/components/QuotationDownload"), { ssr: false });
@@ -37,11 +38,28 @@ function fmtDate(dateStr: string): string {
 }
 
 export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Props) {
+  const { loggedPerms, loggedUser } = useAuth();
+  const { toggleQuotationStatus } = useQuotations();
+
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
+
+  // Check if current user can edit this quotation
+  const canEdit = q.status === "active" || loggedPerms.canEditCompleted;
+
+  // Handle status toggle
+  async function handleStatusToggle() {
+    if (!loggedUser) return;
+    try {
+      const newStatus = q.status === "active" ? "completed" : "active";
+      await toggleQuotationStatus(q.dbId, newStatus, loggedUser);
+    } catch (error) {
+      alert(`Failed to ${q.status === "active" ? "complete" : "activate"} quotation: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   const displayRows: Array<
     | { kind: "section"; key: string; title: string }
@@ -100,8 +118,15 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0"
           style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
-            <h2 className="text-white font-bold text-base">
+            <h2 className="text-white font-bold text-base flex items-center gap-2">
               👁 Quotation #{q.serialNo} — {q.partyName}
+              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                q.status === "completed" 
+                  ? "bg-green-100 text-green-800" 
+                  : "bg-amber-100 text-amber-800"
+              }`}>
+                {q.status === "completed" ? "✓ COMPLETED" : "⏳ ACTIVE"}
+              </span>
             </h2>
             <p className="text-blue-200 text-xs">{q.quotationNo} · {fmtDate(q.date)}</p>
           </div>
@@ -142,11 +167,32 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
                 return Math.max(0, gB - Math.round(gB * pctB / 100));
               })()}
             />
-            {/* Edit */}
-            <button onClick={() => onEdit(q)}
-              className="px-4 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold transition-all active:scale-95">
-              ✏️ Edit
-            </button>
+            {/* Status Toggle & Edit */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleStatusToggle}
+                className={`px-3 py-1.5 rounded-lg text-white text-xs font-bold transition-all active:scale-95 ${
+                  q.status === "completed" 
+                    ? "bg-green-600 hover:bg-green-700" 
+                    : "bg-amber-600 hover:bg-amber-700"
+                }`}
+                title={`Mark as ${q.status === "active" ? "completed" : "active"}`}
+              >
+                {q.status === "completed" ? "✓ Completed" : "⏳ Mark Complete"}
+              </button>
+              
+              {canEdit ? (
+                <button onClick={() => onEdit(q)}
+                  className="px-4 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold transition-all active:scale-95">
+                  ✏️ Edit
+                </button>
+              ) : (
+                <div className="px-4 py-1.5 rounded-lg bg-gray-300 text-gray-500 text-sm font-bold cursor-not-allowed" 
+                     title="This quotation is completed. You need 'Edit Completed' permission to modify it.">
+                  🔒 Edit
+                </div>
+              )}
+            </div>
             <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
           </div>
         </div>
@@ -332,11 +378,18 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
               className="px-5 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors">
               Close
             </button>
-            <button onClick={() => onEdit(q)}
-              className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
-              style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
-              ✏️ Edit This Quotation
-            </button>
+            {canEdit ? (
+              <button onClick={() => onEdit(q)}
+                className="px-6 py-2 rounded-lg text-white text-sm font-bold shadow hover:brightness-110 active:scale-95 transition-all"
+                style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
+                ✏️ Edit This Quotation
+              </button>
+            ) : (
+              <div className="px-6 py-2 rounded-lg bg-gray-300 text-gray-500 text-sm font-bold cursor-not-allowed"
+                   title="This quotation is completed. You need 'Edit Completed' permission to modify it.">
+                🔒 Edit This Quotation
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -12,7 +12,7 @@ export async function GET() {
     if (sb) {
       const { data, error } = await sb
         .from("app_users")
-        .select("id, username, password, role, full_name, active")
+        .select("id, username, password, role, full_name, active, can_edit_completed, can_edit_daily_report")
         .order("created_at", { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data ?? []);
@@ -40,6 +40,8 @@ export async function POST(req: Request) {
     const password = String(body.password ?? "");
     const role = body.role === "admin" ? "admin" : "user";
     const fullName = String(body.fullName ?? "").trim();
+    const canEditCompleted = Boolean(body.canEditCompleted);
+    const canEditDailyReport = Boolean(body.canEditDailyReport);
 
     if (!username) return NextResponse.json({ error: "Username required." }, { status: 400 });
     if (password.length < 6) return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
@@ -49,7 +51,15 @@ export async function POST(req: Request) {
 
     const { data, error } = await admin
       .from("app_users")
-      .insert([{ username, password, role, full_name: fullName, active: true }])
+      .insert([{ 
+        username, 
+        password, 
+        role, 
+        full_name: fullName, 
+        active: true,
+        can_edit_completed: canEditCompleted,
+        can_edit_daily_report: canEditDailyReport
+      }])
       .select()
       .single();
 
@@ -82,6 +92,8 @@ export async function PUT(req: Request) {
     if (body.role !== undefined) updates.role = body.role === "admin" ? "admin" : "user";
     if (body.fullName !== undefined) updates.full_name = String(body.fullName).trim();
     if (body.active !== undefined) updates.active = Boolean(body.active);
+    if (body.canEditCompleted !== undefined) updates.can_edit_completed = Boolean(body.canEditCompleted);
+    if (body.canEditDailyReport !== undefined) updates.can_edit_daily_report = Boolean(body.canEditDailyReport);
 
     const admin = getSupabaseAdminClient();
     if (!admin) return NextResponse.json({ error: "Database not configured." }, { status: 503 });

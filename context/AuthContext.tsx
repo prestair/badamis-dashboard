@@ -6,33 +6,59 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 export type UserRole = "admin" | "user";
 
 export type AppUser = {
-  id?: string;
-  username: string;
-  password: string;
-  role:     UserRole;
-  fullName: string;
-  active:   boolean;
+  id?:                 string;
+  username:            string;
+  password:            string;
+  role:                UserRole;
+  fullName:            string;
+  active:              boolean;
+  canEditCompleted:    boolean;
+  canEditDailyReport:  boolean;
+};
+
+/** Subset of AppUser exposed for the currently logged-in session. */
+export type LoggedUserPerms = {
+  canEditCompleted:   boolean;
+  canEditDailyReport: boolean;
+};
+
+/** GPS / tracking payload passed from the login form. */
+export type LoginGpsPayload = {
+  latitude?:   number;
+  longitude?:  number;
+  gpsAccuracy?: number;
+  gpsError?:   string;
 };
 
 type AuthContextValue = {
-  isLoggedIn:         boolean;
-  loggedUser:         string;
-  loggedRole:         UserRole | null;
-  users:              AppUser[];
-  login:              (username: string, password: string) => boolean;
-  logout:             () => void;
-  changePassword:     (oldPass: string, newPass: string) => { ok: boolean; error?: string };
+  isLoggedIn:          boolean;
+  loggedUser:          string;
+  loggedRole:          UserRole | null;
+  loggedPerms:         LoggedUserPerms;
+  users:               AppUser[];
+  login:               (username: string, password: string, gps?: LoginGpsPayload) => Promise<boolean>;
+  logout:              () => void;
+  changePassword:      (oldPass: string, newPass: string) => { ok: boolean; error?: string };
   // admin only
-  createUser:         (user: Omit<AppUser, "role" | "active"> & { role?: UserRole }) => Promise<{ ok: boolean; error?: string }>;
-  deleteUser:         (username: string) => Promise<{ ok: boolean; error?: string }>;
-  adminChangePassword:(username: string, newPass: string) => Promise<{ ok: boolean; error?: string }>;
-  editUserName:       (username: string, newFullName: string) => Promise<{ ok: boolean; error?: string }>;
-  setUserActive:      (username: string, active: boolean) => Promise<{ ok: boolean; error?: string }>;
+  createUser:          (user: Omit<AppUser, "role" | "active" | "canEditCompleted" | "canEditDailyReport"> & { role?: UserRole }) => Promise<{ ok: boolean; error?: string }>;
+  deleteUser:          (username: string) => Promise<{ ok: boolean; error?: string }>;
+  adminChangePassword: (username: string, newPass: string) => Promise<{ ok: boolean; error?: string }>;
+  editUserName:        (username: string, newFullName: string) => Promise<{ ok: boolean; error?: string }>;
+  setUserActive:       (username: string, active: boolean) => Promise<{ ok: boolean; error?: string }>;
+  setUserPermission:   (username: string, perm: "canEditCompleted" | "canEditDailyReport", value: boolean) => Promise<{ ok: boolean; error?: string }>;
 };
 
 // ── Default users ─────────────────────────────────────────────────────────────
 const DEFAULT_USERS: AppUser[] = [
-  { username: "admin",   password: "prestair@123", role: "admin", fullName: "Administrator", active: true },
+  {
+    username: "admin",
+    password: "prestair@123",
+    role: "admin",
+    fullName: "Administrator",
+    active: true,
+    canEditCompleted: true,
+    canEditDailyReport: true,
+  },
 ];
 
 const STORAGE_KEY = "prestair-users";
@@ -58,26 +84,33 @@ function persistUsers(users: AppUser[]) {
   } catch { /* storage full or unavailable */ }
 }
 
-// Map Supabase row to AppUser
+// Map Supabase row → AppUser
 function mapDbUser(row: Record<string, unknown>): AppUser {
+  const role = row.role === "admin" ? "admin" : "user";
   return {
-    id: String(row.id ?? ""),
-    username: String(row.username ?? ""),
-    password: String(row.password ?? ""),
-    role: row.role === "admin" ? "admin" : "user",
-    fullName: String(row.full_name ?? row.fullName ?? ""),
-    active: row.active !== false,
+    id:                 String(row.id ?? ""),
+    username:           String(row.username ?? ""),
+    password:           String(row.password ?? ""),
+    role,
+    fullName:           String(row.full_name ?? row.fullName ?? ""),
+    active:             row.active !== false,
+    // Admins always have both permissions; regular users read from DB column
+    canEditCompleted:   role === "admin" ? true : row.can_edit_completed === true,
+    canEditDailyReport: role === "admin" ? true : row.can_edit_daily_report === true,
   };
 }
+
+const DEFAULT_PERMS: LoggedUserPerms = { canEditCompleted: false, canEditDailyReport: false };
 
 // ── Context ───────────────────────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsersRaw] = useState<AppUser[]>(DEFAULT_USERS);
+  const [users, setUsersRaw]     = useState<AppUser[]>(DEFAULT_USERS);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loggedUser, setLoggedUser] = useState("");
   const [loggedRole, setLoggedRole] = useState<UserRole | null>(null);
+  const [loggedPerms, setLoggedPerms] = useState<LoggedUserPerms>(DEFAULT_PERMS);
 
   // Restore login session from sessionStorage on mount
   useEffect(() => {
@@ -85,11 +118,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const session = sessionStorage.getItem("prestair-session");
       if (session) {
-        const { username, role } = JSON.parse(session);
+        const { username, role, perms } = JSON.parse(session);
         if (username) {
           setIsLoggedIn(true);
           setLoggedUser(username);
           setLoggedRole(role ?? null);
+          setLoggedPerms(perms ?? DEFAULT_PERMS);
         }
       }
     } catch { /* ignore */ }
@@ -112,7 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { /* use localStorage fallback silently */ });
   }, []);
 
-  // Refresh users from API
   async function refreshUsers() {
     try {
       const res = await fetch("/api/users", { cache: "no-store" });
@@ -126,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* silent */ }
   }
 
-  // Wrapper that persists every change locally
   function setUsers(updater: AppUser[] | ((prev: AppUser[]) => AppUser[])) {
     setUsersRaw((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -136,27 +168,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // ── Login ──────────────────────────────────────────────────────────────────
-  function login(username: string, password: string): boolean {
-    // Username AND password are matched case-insensitively (trimmed).
+  async function login(username: string, password: string, gps: LoginGpsPayload = {}): Promise<boolean> {
     const u = users.find(
-      (u) => u.active
-        && u.username.toLowerCase() === username.trim().toLowerCase()
-        && u.password.toLowerCase() === password.trim().toLowerCase()
+      (u) =>
+        u.active &&
+        u.username.toLowerCase() === username.trim().toLowerCase() &&
+        u.password.toLowerCase() === password.trim().toLowerCase(),
     );
-    if (u) {
-      // Persist session so a scheduled reload can restore it
-      try { sessionStorage.setItem("prestair-session", JSON.stringify({ username: u.username, role: u.role })); } catch { /* */ }
+    if (!u) return false;
 
-      // NOTE: first-login-of-the-day hard refresh removed — it was clearing the
-      // draft-recovery banner. Fresh version is now ensured by a scheduled daily
-      // auto-refresh (see ScheduledRefresh in the app shell).
+    const perms: LoggedUserPerms = {
+      canEditCompleted:   u.canEditCompleted,
+      canEditDailyReport: u.canEditDailyReport,
+    };
 
-      setIsLoggedIn(true);
-      setLoggedUser(u.username);
-      setLoggedRole(u.role);
-      return true;
-    }
-    return false;
+    try {
+      sessionStorage.setItem(
+        "prestair-session",
+        JSON.stringify({ username: u.username, role: u.role, perms }),
+      );
+    } catch { /* */ }
+
+    setIsLoggedIn(true);
+    setLoggedUser(u.username);
+    setLoggedRole(u.role);
+    setLoggedPerms(perms);
+
+    // Fire-and-forget login activity recording — never block the login
+    fetch("/api/login-activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u.username, ...gps }),
+    }).catch(() => {});
+
+    return true;
   }
 
   // ── Logout ─────────────────────────────────────────────────────────────────
@@ -164,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoggedIn(false);
     setLoggedUser("");
     setLoggedRole(null);
+    setLoggedPerms(DEFAULT_PERMS);
     try { sessionStorage.removeItem("prestair-session"); } catch { /* */ }
   }
 
@@ -174,7 +220,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (u.password !== oldPass) return { ok: false, error: "Current password is incorrect." };
     if (newPass.length < 6)     return { ok: false, error: "New password must be at least 6 characters." };
     setUsers((prev) => prev.map((x) => x.username === u.username ? { ...x, password: newPass } : x));
-    // Persist to API
     if (u.id) {
       fetch("/api/users", {
         method: "PUT",
@@ -186,7 +231,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // ── Admin: create user ─────────────────────────────────────────────────────
-  async function createUser(user: Omit<AppUser, "role" | "active"> & { role?: UserRole }): Promise<{ ok: boolean; error?: string }> {
+  async function createUser(
+    user: Omit<AppUser, "role" | "active" | "canEditCompleted" | "canEditDailyReport"> & { role?: UserRole },
+  ): Promise<{ ok: boolean; error?: string }> {
     if (loggedRole !== "admin") return { ok: false, error: "Admin access required." };
     if (!user.username.trim()) return { ok: false, error: "Username required." };
     if (user.password.length < 6) return { ok: false, error: "Password must be at least 6 characters." };
@@ -195,17 +242,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-user-role": "admin" },
-        body: JSON.stringify({ username: user.username.trim(), password: user.password, role: user.role ?? "user", fullName: user.fullName }),
+        body: JSON.stringify({
+          username: user.username.trim(),
+          password: user.password,
+          role: user.role ?? "user",
+          fullName: user.fullName,
+          canEditCompleted: false,
+          canEditDailyReport: false,
+        }),
       });
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data.error ?? "Unable to create user." };
       await refreshUsers();
       return { ok: true };
     } catch {
-      // Fallback to local
       const exists = users.find((u) => u.username.toLowerCase() === user.username.trim().toLowerCase());
       if (exists) return { ok: false, error: "Username already exists." };
-      setUsers((prev) => [...prev, { ...user, username: user.username.trim(), role: user.role ?? "user", active: true }]);
+      setUsers((prev) => [
+        ...prev,
+        {
+          ...user,
+          username: user.username.trim(),
+          role: user.role ?? "user",
+          active: true,
+          canEditCompleted: false,
+          canEditDailyReport: false,
+        },
+      ]);
       return { ok: true };
     }
   }
@@ -272,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  // ── Admin: set user active ─────────────────────────────────────────────────
   async function setUserActive(username: string, active: boolean): Promise<{ ok: boolean; error?: string }> {
     if (loggedRole !== "admin") return { ok: false, error: "Admin access required." };
     if (username === loggedUser && !active) return { ok: false, error: "You cannot deactivate your own account." };
@@ -289,11 +353,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  // ── Admin: set per-user permission ────────────────────────────────────────
+  async function setUserPermission(
+    username: string,
+    perm: "canEditCompleted" | "canEditDailyReport",
+    value: boolean,
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (loggedRole !== "admin") return { ok: false, error: "Admin access required." };
+    const exists = users.find((u) => u.username === username);
+    if (!exists) return { ok: false, error: "User not found." };
+
+    setUsers((prev) => prev.map((u) => u.username === username ? { ...u, [perm]: value } : u));
+
+    if (exists.id) {
+      const dbKey = perm === "canEditCompleted" ? "canEditCompleted" : "canEditDailyReport";
+      fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-user-role": "admin" },
+        body: JSON.stringify({ id: exists.id, [dbKey]: value }),
+      }).catch(() => {});
+    }
+    return { ok: true };
+  }
+
   return (
     <AuthContext.Provider value={{
-      isLoggedIn, loggedUser, loggedRole, users,
+      isLoggedIn, loggedUser, loggedRole, loggedPerms, users,
       login, logout, changePassword,
-      createUser, deleteUser, adminChangePassword, editUserName, setUserActive,
+      createUser, deleteUser, adminChangePassword, editUserName, setUserActive, setUserPermission,
     }}>
       {children}
     </AuthContext.Provider>

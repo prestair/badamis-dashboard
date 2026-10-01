@@ -25,6 +25,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
     adminChangePassword,
     editUserName,
     setUserActive,
+    setUserPermission,
   } = useAuth();
   const [tab, setTab] = useState<Tab>("users");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -140,6 +141,18 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
     });
   }
 
+  function handlePermissionChange(username: string, perm: "canEditCompleted" | "canEditDailyReport", value: boolean) {
+    setUserPermission(username, perm, value).then((res) => {
+      const permLabel = perm === "canEditCompleted" ? "Edit Completed" : "Edit Daily Report";
+      showNotice(
+        res.ok
+          ? `${permLabel} permission ${value ? "granted to" : "revoked from"} "${username}".`
+          : res.error ?? `Unable to update ${permLabel} permission.`,
+        !res.ok
+      );
+    });
+  }
+
   function startNameEdit(username: string, fullName: string) {
     setEditNameFor(username);
     setNewName(fullName);
@@ -246,7 +259,7 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
           {tab === "users" && (
             <section id="user-management-users-panel" role="tabpanel" className="overflow-hidden rounded-xl border border-slate-200">
               <div className="max-h-[62dvh] overflow-auto">
-                <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1280px] border-collapse text-left text-sm">
                   <caption className="sr-only">User accounts and administrative controls</caption>
                   <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
@@ -254,6 +267,8 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                       <th scope="col" className="border-b border-slate-200 px-4 py-3">Username</th>
                       <th scope="col" className="border-b border-slate-200 px-4 py-3">Role</th>
                       <th scope="col" className="border-b border-slate-200 px-4 py-3">Status</th>
+                      <th scope="col" className="border-b border-slate-200 px-4 py-3 text-center">Edit Completed</th>
+                      <th scope="col" className="border-b border-slate-200 px-4 py-3 text-center">Edit Daily Report</th>
                       <th scope="col" className="border-b border-slate-200 px-4 py-3">Actions</th>
                     </tr>
                   </thead>
@@ -311,6 +326,51 @@ export default function UserManagement({ onClose }: { onClose: () => void }) {
                               <option value="inactive" disabled={isCurrentUser}>Inactive</option>
                             </select>
                           </td>
+                          
+                          {/* Edit Completed Permission */}
+                          <td className="px-4 py-3 text-center">
+                            <label htmlFor={`edit-completed-${user.username}`} className="sr-only">
+                              Edit Completed permission for {user.fullName}
+                            </label>
+                            <button
+                              type="button"
+                              id={`edit-completed-${user.username}`}
+                              onClick={() => handlePermissionChange(user.username, "canEditCompleted", !user.canEditCompleted)}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                                user.canEditCompleted ? "bg-green-500" : "bg-gray-300"
+                              }`}
+                              title={`${user.canEditCompleted ? "Revoke" : "Grant"} Edit Completed permission`}
+                            >
+                              <span
+                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                  user.canEditCompleted ? "translate-x-5" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </td>
+                          
+                          {/* Edit Daily Report Permission */}
+                          <td className="px-4 py-3 text-center">
+                            <label htmlFor={`edit-daily-report-${user.username}`} className="sr-only">
+                              Edit Daily Report permission for {user.fullName}
+                            </label>
+                            <button
+                              type="button"
+                              id={`edit-daily-report-${user.username}`}
+                              onClick={() => handlePermissionChange(user.username, "canEditDailyReport", !user.canEditDailyReport)}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-300 ${
+                                user.canEditDailyReport ? "bg-purple-500" : "bg-gray-300"
+                              }`}
+                              title={`${user.canEditDailyReport ? "Revoke" : "Grant"} Edit Daily Report permission`}
+                            >
+                              <span
+                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                  user.canEditDailyReport ? "translate-x-5" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </td>
+                          
                           <td className="px-4 py-3">
                             {changePwdFor === user.username ? (
                               <div className="flex min-w-[390px] items-center gap-2">

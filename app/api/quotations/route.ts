@@ -20,6 +20,7 @@ function toRow(body: Record<string, unknown>, rows: unknown = body.rows) {
     after_discount: body.afterDiscount,
     gst:            body.gst,
     grand_total:    body.grandTotal,
+    status:         body.status ?? "active",
   };
 }
 

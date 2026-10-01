@@ -5,15 +5,23 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 
 const UserManagement = dynamic(() => import("@/components/UserManagement"), { ssr: false });
+const LoginActivityAdmin = dynamic(() => import("@/components/LoginActivityAdmin"), { ssr: false });
 
 export default function UserBar() {
   const { loggedUser, loggedRole, logout } = useAuth();
   const [showUserMgmt, setShowUserMgmt] = useState(false);
+  const [showLoginActivity, setShowLoginActivity] = useState(false);
   const userManagementButtonRef = useRef<HTMLButtonElement>(null);
+  const loginActivityButtonRef = useRef<HTMLButtonElement>(null);
 
   const closeUserManagement = useCallback(() => {
     setShowUserMgmt(false);
     window.requestAnimationFrame(() => userManagementButtonRef.current?.focus());
+  }, []);
+
+  const closeLoginActivity = useCallback(() => {
+    setShowLoginActivity(false);
+    window.requestAnimationFrame(() => loginActivityButtonRef.current?.focus());
   }, []);
 
   return (
@@ -32,17 +40,31 @@ export default function UserBar() {
         </div>
 
         {loggedRole === "admin" && (
-          <button
-            ref={userManagementButtonRef}
-            type="button"
-            onClick={() => setShowUserMgmt(true)}
-            aria-haspopup="dialog"
-            aria-expanded={showUserMgmt}
-            aria-controls="user-management-dialog"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-purple-300"
-          >
-            <span aria-hidden="true">👥</span> User Management
-          </button>
+          <>
+            <button
+              ref={userManagementButtonRef}
+              type="button"
+              onClick={() => setShowUserMgmt(true)}
+              aria-haspopup="dialog"
+              aria-expanded={showUserMgmt}
+              aria-controls="user-management-dialog"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <span aria-hidden="true">👥</span> User Management
+            </button>
+
+            <button
+              ref={loginActivityButtonRef}
+              type="button"
+              onClick={() => setShowLoginActivity(true)}
+              aria-haspopup="dialog"
+              aria-expanded={showLoginActivity}
+              aria-controls="login-activity-dialog"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <span aria-hidden="true">🔍</span> Login Activity
+            </button>
+          </>
         )}
 
         <button
@@ -55,6 +77,7 @@ export default function UserBar() {
       </div>
 
       {showUserMgmt && <UserManagement onClose={closeUserManagement} />}
+      {showLoginActivity && <LoginActivityAdmin onClose={closeLoginActivity} />}
     </>
   );
 }
