@@ -19,7 +19,7 @@ export async function GET(req: Request) {
       .from("login_activity")
       .select("id, username, logged_in_at, ip_address, device_info, latitude, longitude, gps_accuracy, gps_error, city")
       .order("logged_in_at", { ascending: false })
-      .limit(500);
+      .limit(200);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data ?? []);
@@ -79,9 +79,31 @@ export async function POST(req: Request) {
 
     const { error } = await admin.from("login_activity").insert([record]);
     if (error) {
-      // Log but don't block the login
       console.error("[login-activity] insert error:", error.message);
       return NextResponse.json({ ok: true, stored: false });
+    }
+
+    // Keep only the latest 200 records to stay within Supabase free plan limits.
+    // Delete oldest rows when count exceeds 200.
+    const { count } = await admin
+      .from("login_activity")
+      .select("id", { count: "exact", head: true });
+
+    if (count && count > 200) {
+      // Find the cutoff timestamp: the 200th newest record
+      const { data: cutoffRow } = await admin
+        .from("login_activity")
+        .select("logged_in_at")
+        .order("logged_in_at", { ascending: false })
+        .range(199, 199)
+        .single();
+
+      if (cutoffRow?.logged_in_at) {
+        await admin
+          .from("login_activity")
+          .delete()
+          .lt("logged_in_at", cutoffRow.logged_in_at);
+      }
     }
 
     return NextResponse.json({ ok: true, stored: true }, { status: 201 });

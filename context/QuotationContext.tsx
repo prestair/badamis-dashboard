@@ -249,9 +249,9 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Auto-refresh every 3 minutes
+  // Auto-refresh every 10 minutes — reduced from 3 min to save Supabase egress
   useEffect(() => {
-    const interval = setInterval(() => { refresh(); }, 3 * 60 * 1000);
+    const interval = setInterval(() => { refresh(); }, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, [refresh]);
 

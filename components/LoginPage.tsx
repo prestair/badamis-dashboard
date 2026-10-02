@@ -105,7 +105,6 @@ export default function LoginPage() {
   useEffect(() => {
     if (gpsEnabled && gps.status === "idle") requestGps();
   }, [gpsEnabled, gps.status, requestGps]);
-
   // ── Form submit ───────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,24 +113,28 @@ export default function LoginPage() {
     if (!username.trim()) { setFormError("Username is required."); return; }
     if (!password)        { setFormError("Password is required."); return; }
 
-    // If toggle is ON, enforce GPS
-    if (gpsEnabled) {
-      if (gps.status === "requesting") {
-        setFormError("Please wait — acquiring your location…");
-        return;
-      }
-      if (gps.status === "denied") {
-        setFormError("Please allow location access for login.");
-        return;
-      }
+    // GPS is ALWAYS mandatory — toggle only controls whether we auto-request it
+    if (gps.status === "idle" || gps.status === "requesting") {
+      setFormError("Please wait — acquiring your location…");
+      if (gps.status === "idle") requestGps();
+      return;
+    }
+    if (gps.status === "denied") {
+      setFormError("Please allow location access for login.");
+      return;
+    }
+    if (gps.status === "unavailable") {
+      setFormError("Location is not available on this device. Please use a device with GPS.");
+      return;
     }
 
     setLoading(true);
     try {
+      const currentGps = gps; // capture snapshot to avoid narrowing issues
       const gpsPayload =
-        gps.status === "granted"
-          ? { latitude: gps.lat, longitude: gps.lng, gpsAccuracy: gps.accuracy, city: gps.city }
-          : gps.status === "unavailable"
+        currentGps.status === "granted"
+          ? { latitude: currentGps.lat, longitude: currentGps.lng, gpsAccuracy: currentGps.accuracy, city: currentGps.city }
+          : currentGps.status === "unavailable"
           ? { gpsError: "Geolocation API not available" }
           : {};
 
@@ -183,7 +186,7 @@ export default function LoginPage() {
     return null;
   }
 
-  const gpsBlocking = gpsEnabled && (gps.status === "requesting" || gps.status === "denied");
+  const gpsBlocking = gps.status === "requesting" || gps.status === "denied" || gps.status === "unavailable";
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -241,7 +244,8 @@ export default function LoginPage() {
             onClick={() => {
               const next = !gpsEnabled;
               setGpsEnabled(next);
-              if (next) setGps({ status: "idle" });
+              // If turning ON and GPS was never requested, request now
+              if (next && gps.status === "idle") requestGps();
             }}
             className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
               gpsEnabled ? "bg-blue-600" : "bg-slate-300"
