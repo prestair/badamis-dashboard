@@ -152,16 +152,8 @@ export default function LoginPage() {
   function GpsBadge() {
     if (!gpsEnabled) return null;
 
-    if (gps.status === "requesting")
-      return (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700">
-          <svg className="h-4 w-4 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
-          Acquiring location…
-        </div>
-      );
+    // "requesting" — silent, show nothing
+    if (gps.status === "requesting") return null;
 
     if (gps.status === "denied")
       return (
@@ -182,7 +174,7 @@ export default function LoginPage() {
         </div>
       );
 
-    // granted → city already shown in top-right, no badge needed
+    // granted → city shown in top-right, no badge needed here
     return null;
   }
 
@@ -353,14 +345,6 @@ export default function LoginPage() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                     </svg>
                     Signing in...
-                  </span>
-                ) : gps.status === "requesting" && gpsEnabled ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                    </svg>
-                    Waiting for location…
                   </span>
                 ) : "Sign In"}
               </button>
