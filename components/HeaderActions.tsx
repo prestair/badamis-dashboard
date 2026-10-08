@@ -32,6 +32,7 @@ export default function HeaderActions() {
     setSearchQuery,
     deleteQuotation,
     saveQuotation,
+    loadQuotationDetail,
     refresh,
     loading,
     dateFrom,
@@ -50,6 +51,56 @@ export default function HeaderActions() {
   const [page,           setPage]           = useState(1);
   const [historyFor,     setHistoryFor]     = useState<string | null>(null);
   const [printingId,     setPrintingId]     = useState<string | null>(null);
+  const [loadingId,      setLoadingId]      = useState<string | null>(null);
+
+  // Load the full quotation detail (heavy `rows`) on demand, then hand the full
+  // object to the given setter/transform. The LIST omits `rows` to save egress,
+  // so View / Edit / Copy must fetch detail before opening their modal.
+  async function openWith(
+    setter: (q: SavedQuotation) => void,
+    q: SavedQuotation,
+    transform?: (full: SavedQuotation) => SavedQuotation
+  ) {
+    setLoadingId(q.dbId);
+    try {
+      const full = await loadQuotationDetail(q.dbId);
+      setter(transform ? transform(full) : full);
+    } catch (error) {
+      console.error("Failed to load quotation detail", error);
+      alert(error instanceof Error ? error.message : "Failed to load quotation");
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  // Print needs the full detail too; fetch it, then run the existing print flow.
+  async function handlePrintById(q: SavedQuotation) {
+    setLoadingId(q.dbId);
+    try {
+      const full = await loadQuotationDetail(q.dbId);
+      await handlePrint(full);
+    } catch (error) {
+      console.error("Failed to load quotation detail for print", error);
+      alert(error instanceof Error ? error.message : "Failed to load quotation");
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  // Open the Edit-History popup — load detail first so `editHistory` is present.
+  async function openHistory(q: SavedQuotation) {
+    if (historyFor === q.dbId) { setHistoryFor(null); return; }
+    setLoadingId(q.dbId);
+    try {
+      await loadQuotationDetail(q.dbId);
+      setHistoryFor(q.dbId);
+    } catch (error) {
+      console.error("Failed to load quotation detail for history", error);
+      alert(error instanceof Error ? error.message : "Failed to load quotation");
+    } finally {
+      setLoadingId(null);
+    }
+  }
 
   const totalGrand = filteredQuotations.reduce((sum, quotation) => sum + quotation.grandTotal, 0);
 
@@ -383,7 +434,7 @@ export default function HeaderActions() {
               {visibleQuotations.map((q, index) => (
                 <tr key={q.dbId}
                   className="hover:bg-slate-50 transition-colors cursor-pointer"
-                  onClick={() => setViewQuotation(q)}>
+                  onClick={() => openWith(setViewQuotation, q)}>
                   <td className="border border-slate-200 px-3 py-2 text-center text-slate-800 font-bold">{filteredQuotations.length - startIndex - index}</td>
                   <td className="border border-slate-200 px-3 py-2 text-slate-600 font-mono text-[10px]">{q.quotationNo || "—"}</td>
                   <td className="border border-slate-200 px-3 py-2 text-slate-600">{fmtDate(q.date)}</td>
@@ -398,8 +449,9 @@ export default function HeaderActions() {
                   >
                     <button
                       type="button"
-                      onClick={() => setHistoryFor((current) => current === q.dbId ? null : q.dbId)}
-                      className="font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                      onClick={() => openHistory(q)}
+                      disabled={loadingId === q.dbId}
+                      className="font-semibold text-blue-600 hover:text-blue-800 hover:underline disabled:cursor-wait disabled:opacity-60"
                       title="View compact step-by-step edit history"
                       aria-expanded={historyFor === q.dbId}
                       aria-controls={`quotation-history-${q.dbId}`}
@@ -492,25 +544,28 @@ export default function HeaderActions() {
                   <td className="border border-slate-200 px-2 py-2 text-center"
                     onClick={(event) => event.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1.5">
-                      <button onClick={() => setViewQuotation(q)}
-                        className="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-[10px] font-bold transition-all">
-                        👁 View
+                      <button onClick={() => openWith(setViewQuotation, q)}
+                        disabled={loadingId === q.dbId}
+                        className="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50">
+                        {loadingId === q.dbId ? "Loading…" : "👁 View"}
                       </button>
                       <button
                         type="button"
-                        onClick={() => handlePrint(q)}
-                        disabled={printingId !== null}
+                        onClick={() => handlePrintById(q)}
+                        disabled={printingId !== null || loadingId === q.dbId}
                         className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50"
                         title="Print this quotation"
                       >
-                        {printingId === q.dbId ? "Preparing…" : "🖨 Print"}
+                        {printingId === q.dbId || loadingId === q.dbId ? "Preparing…" : "🖨 Print"}
                       </button>
-                      <button onClick={() => setEditQuotation(q)}
-                        className="px-2 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 text-[10px] font-bold transition-all">
+                      <button onClick={() => openWith(setEditQuotation, q)}
+                        disabled={loadingId === q.dbId}
+                        className="px-2 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50">
                         ✏️ Edit
                       </button>
-                      <button onClick={() => { setEditQuotation({...q, dbId: "", serialNo: 0, quotationNo: ""}); }}
-                        className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold transition-all"
+                      <button onClick={() => openWith(setEditQuotation, q, (full) => ({ ...full, dbId: "", serialNo: 0, quotationNo: "" }))}
+                        disabled={loadingId === q.dbId}
+                        className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50"
                         title="Duplicate this quotation">
                         📋 Copy
                       </button>

@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
-import { appendQuotationEdit } from "@/lib/quotationAudit";
+import { appendQuotationEdit, unpackQuotationRows } from "@/lib/quotationAudit";
 
 const BACKEND = process.env.BACKEND_URL;
+
+function isMissingAuditColumnError(message: string | undefined): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("created_by") || m.includes("edit_count") ||
+    m.includes("does not exist");
+}
 
 function isAdminRequest(req: Request) {
   return req.headers.get("x-user-role")?.trim().toLowerCase() === "admin";
@@ -19,7 +26,8 @@ function withoutQuotationNumberChanges(value: unknown) {
 function toRow(
   body: Record<string, unknown>,
   rows: unknown = body.rows,
-  quotationNo: unknown = body.quotationNo
+  quotationNo: unknown = body.quotationNo,
+  extra?: Record<string, unknown>
 ) {
   return {
     quotation_no:   quotationNo,
@@ -37,7 +45,60 @@ function toRow(
     gst:            body.gst,
     grand_total:    body.grandTotal,
     status:         body.status ?? "active",
+    ...(extra ?? {}),
   };
+}
+
+// ── GET single (full detail incl. heavy `rows`) ───────────────────────────────
+// On-demand fetch for one quotation when the user opens View / Edit / Copy /
+// Print / Edit-History. The LIST endpoint omits `rows`; this restores it.
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    // 1. Local Express backend
+    if (BACKEND) {
+      try {
+        const res = await fetch(`${BACKEND}/api/quotations/${id}`, { cache: "no-store" });
+        if (res.ok) return NextResponse.json(await res.json());
+      } catch {
+        // Backend unreachable — fall through to Supabase/file
+      }
+    }
+
+    // 2. Supabase
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { data, error } = await sb
+        .from("quotations")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) {
+        if (error.code === "PGRST116") {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(data);
+    }
+
+    // 3. File fallback
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readAll } = require("@/lib/fileStore");
+    const found = readAll().find((quotation: { id: string }) => quotation.id === id);
+    if (!found) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(found);
+  } catch (e: unknown) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Server error" },
+      { status: 500 }
+    );
+  }
 }
 
 // ── PUT update ────────────────────────────────────────────────────────────────
@@ -76,6 +137,8 @@ export async function PUT(
             rows: fallbackRows,
             changes: safeChanges,
             allowQuotationNumberChange: isAdmin,
+            created_by: unpackQuotationRows(fallbackRows).audit.createdBy,
+            edit_count: unpackQuotationRows(fallbackRows).audit.editCount,
           }),
         });
         if (res.ok) return NextResponse.json(await res.json());
@@ -103,12 +166,24 @@ export async function PUT(
         safeChanges
       );
       const quotationNo = isAdmin ? body.quotationNo : existing?.quotation_no;
-      const { data, error } = await sb
+      const { audit } = unpackQuotationRows(auditedRows);
+      const flatColumns = { created_by: audit.createdBy, edit_count: audit.editCount };
+      // Update WITH the flat audit columns; retry WITHOUT them if the migration
+      // adding those columns hasn't been applied yet.
+      let { data, error } = await sb
         .from("quotations")
-        .update(toRow(body, auditedRows, quotationNo))
+        .update(toRow(body, auditedRows, quotationNo, flatColumns))
         .eq("id", id)
         .select()
         .single();
+      if (error && isMissingAuditColumnError(error.message)) {
+        ({ data, error } = await sb
+          .from("quotations")
+          .update(toRow(body, auditedRows, quotationNo))
+          .eq("id", id)
+          .select()
+          .single());
+      }
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       if (!data)  return NextResponse.json({ error: "Not found" }, { status: 404 });
       return NextResponse.json(data);
@@ -127,7 +202,14 @@ export async function PUT(
       safeChanges
     );
     const quotationNo = isAdmin ? body.quotationNo : existing?.quotation_no;
-    const updated = updateQuotation(id, toRow(body, auditedRows, quotationNo));
+    const { audit } = unpackQuotationRows(auditedRows);
+    const updated = updateQuotation(
+      id,
+      toRow(body, auditedRows, quotationNo, {
+        created_by: audit.createdBy,
+        edit_count: audit.editCount,
+      })
+    );
     if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(updated);
   } catch (e: unknown) {

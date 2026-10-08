@@ -1,10 +1,36 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
-import { createAuditedRows } from "@/lib/quotationAudit";
+import { createAuditedRows, unpackQuotationRows } from "@/lib/quotationAudit";
 
 const BACKEND = process.env.BACKEND_URL;
 
-function toRow(body: Record<string, unknown>, rows: unknown = body.rows) {
+// Lightweight columns for the dashboard LIST — deliberately NO `rows` JSONB
+// (that heavy payload is fetched on demand per-quotation via GET /:id). This is
+// the core Supabase egress reduction.
+const LIST_COLUMNS =
+  "id, serial_no, quotation_no, date, party_name, party_address, party_gst, " +
+  "subject, attention, requester, gross, discount, after_discount, gst, " +
+  "grand_total, status, saved_at, created_by, edit_count";
+
+// Same list minus the two flat audit columns, used as a fallback when the
+// migration adding `created_by`/`edit_count` has not been applied yet.
+const LIST_COLUMNS_NO_AUDIT =
+  "id, serial_no, quotation_no, date, party_name, party_address, party_gst, " +
+  "subject, attention, requester, gross, discount, after_discount, gst, " +
+  "grand_total, status, saved_at";
+
+function isMissingAuditColumnError(message: string | undefined): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("created_by") || m.includes("edit_count") ||
+    m.includes("does not exist");
+}
+
+function toRow(
+  body: Record<string, unknown>,
+  rows: unknown = body.rows,
+  extra?: Record<string, unknown>
+) {
   return {
     quotation_no:   body.quotationNo,
     date:           body.date,
@@ -21,6 +47,7 @@ function toRow(body: Record<string, unknown>, rows: unknown = body.rows) {
     gst:            body.gst,
     grand_total:    body.grandTotal,
     status:         body.status ?? "active",
+    ...(extra ?? {}),
   };
 }
 
@@ -40,10 +67,19 @@ export async function GET() {
     // 2. Supabase (Vercel)
     const sb = getSupabaseClient();
     if (sb) {
-      const { data, error } = await sb
+      // Attempt the full lightweight select (incl. flat audit columns). If the
+      // migration hasn't been applied, those columns don't exist yet, so retry
+      // without them — egress savings (dropping `rows`) apply either way.
+      let { data, error } = await sb
         .from("quotations")
-        .select("*")
+        .select(LIST_COLUMNS)
         .order("serial_no", { ascending: true });
+      if (error && isMissingAuditColumnError(error.message)) {
+        ({ data, error } = await sb
+          .from("quotations")
+          .select(LIST_COLUMNS_NO_AUDIT)
+          .order("serial_no", { ascending: true }));
+      }
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data ?? []);
     }
@@ -65,6 +101,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const auditedRows = createAuditedRows(body.rows, body.actorName);
+    const { audit } = unpackQuotationRows(auditedRows);
+    const flatColumns = { created_by: audit.createdBy, edit_count: audit.editCount };
 
     // 1. Local Express
     if (BACKEND) {
@@ -72,7 +110,7 @@ export async function POST(req: Request) {
         const res = await fetch(`${BACKEND}/api/quotations`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ ...body, rows: auditedRows }),
+          body:    JSON.stringify({ ...body, rows: auditedRows, ...flatColumns }),
         });
         if (res.ok) return NextResponse.json(await res.json(), { status: 201 });
       } catch {
@@ -83,11 +121,20 @@ export async function POST(req: Request) {
     // 2. Supabase
     const sb = getSupabaseClient();
     if (sb) {
-      const { data, error } = await sb
+      // Insert WITH the flat audit columns; retry WITHOUT them if the migration
+      // hasn't added those columns yet.
+      let { data, error } = await sb
         .from("quotations")
-        .insert([toRow(body, auditedRows)])
+        .insert([toRow(body, auditedRows, flatColumns)])
         .select()
         .single();
+      if (error && isMissingAuditColumnError(error.message)) {
+        ({ data, error } = await sb
+          .from("quotations")
+          .insert([toRow(body, auditedRows)])
+          .select()
+          .single());
+      }
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data, { status: 201 });
     }
@@ -95,7 +142,7 @@ export async function POST(req: Request) {
     // 3. File fallback
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createQuotation } = require("@/lib/fileStore");
-    return NextResponse.json(createQuotation(toRow(body, auditedRows)), { status: 201 });
+    return NextResponse.json(createQuotation(toRow(body, auditedRows, flatColumns)), { status: 201 });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Server error" },

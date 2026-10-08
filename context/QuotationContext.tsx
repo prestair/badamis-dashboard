@@ -82,6 +82,7 @@ type QuotationContextValue = {
   saveQuotation:      (q: QuotationInput, actorName: string) => Promise<number>;
   saveQuotationFull:  (q: QuotationInput, actorName: string) => Promise<SavedQuotation>;
   updateQuotation:    (dbId: string, q: QuotationInput, actorName: string) => Promise<void>;
+  loadQuotationDetail:(dbId: string) => Promise<SavedQuotation>;
   deleteQuotation:    (dbId: string) => Promise<void>;
   toggleQuotationStatus: (dbId: string, newStatus: "active" | "completed", actorName: string) => Promise<void>;
   totalCount:         number;
@@ -171,10 +172,18 @@ function mapRow(r: any): SavedQuotation {
     grandTotal:   Number(r.grand_total)   || 0,
     status:       r.status === "completed" ? "completed" : "active",
     savedAt:      r.saved_at      ?? "",
-    createdBy:    audit.createdBy,
+    // Prefer the flat summary columns (present on LIST items without the heavy
+    // `rows`). Fall back to the audit unpacked from `rows` for the detail fetch
+    // and the local file backend. `createdBy`/`editCount` drive the list badge
+    // and the charts, so they must be populated even when `rows` is absent.
+    createdBy:    (typeof r.created_by === "string" && r.created_by)
+                    ? r.created_by
+                    : audit.createdBy,
     createdAt:    audit.createdAt || r.saved_at || "",
     editedBy:     audit.editedBy,
-    editCount:    audit.editCount,
+    editCount:    r.edit_count !== undefined && r.edit_count !== null
+                    ? Math.max(Number(r.edit_count) || 0, audit.editCount)
+                    : audit.editCount,
     editHistory:  audit.editHistory,
     partBRows:    partBItems.length > 0 ? normalizeSavedRows(partBItems) : undefined,
   };
@@ -264,11 +273,25 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Auto-refresh every 10 minutes — reduced from 3 min to save Supabase egress
+  // Auto-refresh every 20 minutes — reduced to save Supabase egress
   useEffect(() => {
-    const interval = setInterval(() => { refresh(); }, 10 * 60 * 1000);
+    const interval = setInterval(() => { refresh(); }, 20 * 60 * 1000);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  // ── load full detail for ONE quotation (on demand) ─────────────────────────
+  // The LIST omits the heavy `rows`; call this before View / Edit / Copy /
+  // Print / Edit-History so the consumer gets full items + edit history. The
+  // fetched detail is cached in place so later reads (status toggle, re-open,
+  // updateQuotation's previousAudit) operate on complete data.
+  const loadQuotationDetail = useCallback(async (dbId: string): Promise<SavedQuotation> => {
+    const res = await fetch(`/api/quotations/${dbId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? "Failed to load quotation detail");
+    const full = mapRow(data);
+    setQuotations((prev) => prev.map((x) => (x.dbId === dbId ? full : x)));
+    return full;
+  }, []);
 
   // ── save new quotation ─────────────────────────────────────────────────────
   // Create a new quotation and return the FULL saved record (id + serial etc.)
@@ -391,6 +414,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
         saveQuotation,
         saveQuotationFull,
         updateQuotation,
+        loadQuotationDetail,
         deleteQuotation,
         toggleQuotationStatus,
         totalCount: quotations.length,
