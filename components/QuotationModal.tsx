@@ -103,6 +103,17 @@ type ItemRow = {
   qty:      string;
   additionalColumn: string;
   rate:     string;
+  // ── New optional on-screen dimension fields ──
+  // These feed the derived `size` string and (for Table items) the auto RATE.
+  // They are UI/entry-only and are EXCLUDED from the PDF/Excel export.
+  mmInch?:  "MM" | "INCH";
+  dimL?:    string;
+  dimB?:    string;
+  dimH?:    string;
+  dimBS?:   string;
+  // UI-only flag (never persisted): true once the user manually types a RATE,
+  // which suppresses auto-recalc until the next dimension/unit change.
+  rateManual?: boolean;
 };
 
 type Props = { onClose: () => void; initialData?: SavedQuotation | null; resumeDraft?: boolean };
@@ -110,11 +121,74 @@ type Props = { onClose: () => void; initialData?: SavedQuotation | null; resumeD
 let uidCounter = 1;
 function newUid() { return `row-${uidCounter++}`; }
 
+// ── Derived-value helpers (pure) ────────────────────────────────────────────
+// composeSize: builds the SIZE string from L/B/H/B/S.
+//  - Collect L, B, H from dimL/dimB/dimH keeping only non-empty TRIMMED values,
+//    IN ORDER (so a missing middle dimension is simply skipped).
+//  - When unit === "INCH" append a double-quote (") to each collected value.
+//  - Join the collected L/B/H parts with an uppercase "X".
+//  - If dimBS is non-empty (trimmed), append "+" + bs (INCH: bs also gets a ").
+//  - Values pass through verbatim (no Number() reformat → decimals preserved).
+// Examples: MM 1280/150/812/200 -> "1280X150X812+200";
+//           MM 1280/150//200    -> "1280X150+200";
+//           MM 1280/150/200/    -> "1280X150X200";
+//           INCH 53/28/34/4     -> 53"X28"X34"+4";  (all empty -> "")
+function composeSize(
+  unit: "MM" | "INCH",
+  dimL?: string, dimB?: string, dimH?: string, dimBS?: string
+): string {
+  const suffix = unit === "INCH" ? "\"" : "";
+  const parts = [dimL, dimB, dimH]
+    .map((v) => (v ?? "").trim())
+    .filter((v) => v !== "")
+    .map((v) => v + suffix);
+  let size = parts.join("X");
+  const bs = (dimBS ?? "").trim();
+  if (bs !== "") size += "+" + bs + suffix;
+  return size;
+}
+
+// computeTableRate: auto RATE for Table items only.
+//  - Returns null (do NOT auto-write) unless `desc` contains "table"
+//    (case-insensitive substring) AND Number(dimL) is finite and > 0.
+//  - feet = unit === "MM" ? Number(dimL)/304.8 : Number(dimL)/12  (1ft=304.8mm/12in)
+//  - roundedHalf = Math.round(feet*2)/2  (round to nearest 0.5 ft)
+//  - rate = roundedHalf * 4000  (returned as a string).
+function computeTableRate(
+  unit: "MM" | "INCH",
+  desc: string,
+  dimL?: string
+): string | null {
+  if (!desc || !desc.toLowerCase().includes("table")) return null;
+  const l = Number((dimL ?? "").trim());
+  if (!Number.isFinite(l) || l <= 0) return null;
+  const feet = unit === "MM" ? l / 304.8 : l / 12;
+  const roundedHalf = Math.round(feet * 2) / 2;
+  return String(roundedHalf * 4000);
+}
+
+// recomputeDerived: PURE. Returns a new row with `size` recomposed and, for
+// Table items, `rate` auto-filled — UNLESS the user manually overrode RATE
+// (rateManual=true). Manual-override behaviour (requirement 6): rateManual is
+// set true when the user types in RATE, and reset to false whenever a
+// dimension/unit changes, so auto-calc resumes after the next dimension edit.
+// Section rows are returned unchanged.
+function recomputeDerived(row: ItemRow): ItemRow {
+  if (row.rowType !== "item") return row;
+  const unit = row.mmInch === "INCH" ? "INCH" : "MM";
+  const size = composeSize(unit, row.dimL, row.dimB, row.dimH, row.dimBS);
+  const next: ItemRow = { ...row, size };
+  const auto = computeTableRate(unit, row.desc, row.dimL);
+  if (auto !== null && !row.rateManual) next.rate = auto;
+  return next;
+}
+
 function blankRow(slNo: number): ItemRow {
   return {
     uid: newUid(), rowType: "item", sectionId: "", slNo: String(slNo),
     itemCode: "", desc: "", size: "", hsn: "", qty: "",
     additionalColumn: "", rate: "",
+    mmInch: "MM", dimL: "", dimB: "", dimH: "", dimBS: "", rateManual: false,
   };
 }
 
@@ -155,6 +229,11 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
       size: row.size, hsn: row.hsn, qty: String(row.qty),
       additionalColumn: row.additionalColumn,
       rate: row.rate !== null ? String(row.rate) : "",
+      // Restore new dim fields verbatim; OLD rows default to blank + MM.
+      // IMPORTANT: do NOT recompute size/rate here — restored values stay as saved.
+      mmInch: row.mmInch === "INCH" ? "INCH" : "MM",
+      dimL: row.dimL ?? "", dimB: row.dimB ?? "", dimH: row.dimH ?? "", dimBS: row.dimBS ?? "",
+      rateManual: false,
     };
   });
 }
@@ -239,6 +318,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
         size: row.size, hsn: row.hsn, qty: String(row.qty),
         additionalColumn: row.additionalColumn,
         rate: row.rate !== null ? String(row.rate) : "",
+        // Restore new dim fields verbatim; OLD rows default to blank + MM.
+        // IMPORTANT: do NOT recompute size/rate here — restored values stay as saved.
+        mmInch: row.mmInch === "INCH" ? "INCH" : "MM",
+        dimL: row.dimL ?? "", dimB: row.dimB ?? "", dimH: row.dimH ?? "", dimBS: row.dimBS ?? "",
+        rateManual: false,
       };
     });
   });
@@ -404,9 +488,30 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   }, [saved, draftKey]);
 
   // ── Row helpers ────────────────────────────────────────────────────────────
+  // Apply a single field edit to a row and recompute derived values (size + Table
+  // rate) when the edit affects them. Shared by Part A and Part B mutators.
+  //  - dimension/unit edit (mmInch/dimL/dimB/dimH/dimBS): reset rateManual=false
+  //    (re-enable auto-calc per req 6) then recomputeDerived.
+  //  - rate edit: set rateManual=true (manual override), no recompute.
+  //  - desc edit: recomputeDerived (so adding/removing "table" re-evaluates auto rate).
+  //  - any other field: plain assignment, as before.
+  function applyRowEdit(r: ItemRow, field: Exclude<keyof ItemRow, "rowType">, value: string): ItemRow {
+    if (r.rowType === "section") return { ...r, [field]: value };
+    if (field === "mmInch" || field === "dimL" || field === "dimB" || field === "dimH" || field === "dimBS") {
+      return recomputeDerived({ ...r, [field]: value, rateManual: false });
+    }
+    if (field === "rate") {
+      return { ...r, rate: value, rateManual: true };
+    }
+    if (field === "desc") {
+      return recomputeDerived({ ...r, desc: value });
+    }
+    return { ...r, [field]: value };
+  }
+
   function updateItemRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
     setItemRows((prev) =>
-      prev.map((r) => (r.uid === uid ? { ...r, [field]: value } : r))
+      prev.map((r) => (r.uid === uid ? applyRowEdit(r, field, value) : r))
     );
     setSaved(false);
   }
@@ -460,7 +565,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   // ── Part B Row helpers ─────────────────────────────────────────────────────
   function updatePartBRow(uid: string, field: Exclude<keyof ItemRow, "rowType">, value: string) {
     setPartBItemRows((prev) =>
-      prev.map((r) => (r.uid === uid ? { ...r, [field]: value } : r))
+      prev.map((r) => (r.uid === uid ? applyRowEdit(r, field, value) : r))
     );
     setSaved(false);
   }
@@ -626,7 +731,9 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
       const amt  = rowAmt(r);
       return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
                section: "Custom", qty, additionalColumn: r.additionalColumn,
-               discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
+               discount: 0, discountIsPerUnit: false, rate, amt, checked: true,
+               // Persist the new dim fields (NOT the UI-only rateManual flag).
+               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "" };
     });
 
     const savedPartBRows: SavedRowState[] = partBItemRows.map((r) => {
@@ -643,7 +750,9 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
       const amt  = rowAmt(r);
       return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
                section: "Custom", qty, additionalColumn: r.additionalColumn,
-               discount: 0, discountIsPerUnit: false, rate, amt, checked: true };
+               discount: 0, discountIsPerUnit: false, rate, amt, checked: true,
+               // Persist the new dim fields (NOT the UI-only rateManual flag).
+               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "" };
     });
 
     // Ensure requester initials are present in quotation no even if user
@@ -1066,6 +1175,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         <th className="border border-slate-600 px-2 py-2.5 text-left" style={{width:90}}>ITEM CODE</th>
                         <th className="border border-slate-600 px-3 py-2.5 text-left">ITEM NAME</th>
                         <th className="border border-slate-600 px-3 py-2.5 text-left" style={{width:220, minWidth:220}}>ADDITIONAL DESCRIPTION</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:72}}>MM/INCH</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:48}}>L</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:48}}>B</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:48}}>H</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:48}}>B/S</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
@@ -1081,7 +1195,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         if (row.rowType === "section") {
                           return (
                             <tr key={row.uid} className="group bg-blue-50">
-                              <td colSpan={9} className="border border-blue-200 px-3 py-2">
+                              <td colSpan={14} className="border border-blue-200 px-3 py-2">
                                 <div className="flex items-center gap-3">
                                   <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-blue-700">Section</span>
                                   <input
@@ -1147,11 +1261,49 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
                             </td>
 
-                            {/* SIZE */}
+                            {/* MM/INCH */}
                             <td className="border border-slate-100 px-1 py-1">
-                              <input value={row.size}
-                                onChange={(e) => updateItemRow(row.uid,"size",e.target.value)}
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                              <select value={row.mmInch ?? "MM"}
+                                onChange={(e) => updateItemRow(row.uid,"mmInch",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black">
+                                <option value="MM">MM</option>
+                                <option value="INCH">INCH</option>
+                              </select>
+                            </td>
+
+                            {/* L */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input inputMode="decimal" value={row.dimL ?? ""}
+                                onChange={(e) => updateItemRow(row.uid,"dimL",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                            </td>
+
+                            {/* B */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input inputMode="decimal" value={row.dimB ?? ""}
+                                onChange={(e) => updateItemRow(row.uid,"dimB",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                            </td>
+
+                            {/* H */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input inputMode="decimal" value={row.dimH ?? ""}
+                                onChange={(e) => updateItemRow(row.uid,"dimH",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                            </td>
+
+                            {/* B/S */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input inputMode="decimal" value={row.dimBS ?? ""}
+                                onChange={(e) => updateItemRow(row.uid,"dimBS",e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                            </td>
+
+                            {/* SIZE — derived (read-only), composed from L/B/H/B/S */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input value={row.size} readOnly tabIndex={-1}
+                                title="Auto-composed from L, B, H and B/S"
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs bg-slate-50 text-slate-700 cursor-default focus:outline-none" />
                             </td>
 
                             {/* HSN CODE — searchable dropdown from HSN table */}
@@ -1210,7 +1362,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
                           acc.push(
                             <tr key={`insert-after-${row.uid}`} className="bg-slate-50/50">
-                              <td colSpan={11} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                              <td colSpan={16} className="border border-dashed border-slate-200 px-3 py-1 text-center">
                                 <button type="button" onClick={() => insertRowAfter(idx)}
                                   className="text-[10px] font-bold text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-3 py-0.5 rounded transition-colors"
                                   title="Insert row here">
@@ -1260,6 +1412,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             <th className="border border-indigo-600 px-2 py-2.5 text-left" style={{width:90}}>ITEM CODE</th>
                             <th className="border border-indigo-600 px-3 py-2.5 text-left">ITEM NAME</th>
                             <th className="border border-indigo-600 px-3 py-2.5 text-left" style={{width:220, minWidth:220}}>ADDITIONAL DESCRIPTION</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:72}}>MM/INCH</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:48}}>L</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:48}}>B</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:48}}>H</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:48}}>B/S</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
@@ -1275,7 +1432,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             if (row.rowType === "section") {
                               return (
                                 <tr key={row.uid} className="group bg-indigo-50">
-                                  <td colSpan={9} className="border border-indigo-200 px-3 py-2">
+                                  <td colSpan={14} className="border border-indigo-200 px-3 py-2">
                                     <div className="flex items-center gap-3">
                                       <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-indigo-700">Section</span>
                                       <input
@@ -1317,9 +1474,39 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                   <input value={row.additionalColumn} onChange={(e) => updatePartBRow(row.uid,"additionalColumn",e.target.value)}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
                                 </td>
+                                {/* MM/INCH */}
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input value={row.size} onChange={(e) => updatePartBRow(row.uid,"size",e.target.value)}
-                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                  <select value={row.mmInch ?? "MM"} onChange={(e) => updatePartBRow(row.uid,"mmInch",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black">
+                                    <option value="MM">MM</option>
+                                    <option value="INCH">INCH</option>
+                                  </select>
+                                </td>
+                                {/* L */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input inputMode="decimal" value={row.dimL ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimL",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                {/* B */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input inputMode="decimal" value={row.dimB ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimB",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                {/* H */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input inputMode="decimal" value={row.dimH ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimH",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                {/* B/S */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input inputMode="decimal" value={row.dimBS ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimBS",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                </td>
+                                {/* SIZE — derived (read-only), composed from L/B/H/B/S */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.size} readOnly tabIndex={-1}
+                                    title="Auto-composed from L, B, H and B/S"
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs bg-slate-50 text-slate-700 cursor-default focus:outline-none" />
                                 </td>
                                 <td className="border border-slate-100 px-1 py-1">
                                   <input value={row.hsn} list="quotation-hsn-options" autoComplete="off"
@@ -1358,7 +1545,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
                               acc.push(
                                 <tr key={`insert-b-after-${row.uid}`} className="bg-slate-50/50">
-                                  <td colSpan={11} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                                  <td colSpan={16} className="border border-dashed border-slate-200 px-3 py-1 text-center">
                                     <button type="button" onClick={() => insertPartBRowAfter(idx)}
                                       className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 px-3 py-0.5 rounded transition-colors">
                                       + Add Row

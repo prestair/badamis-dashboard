@@ -26,6 +26,14 @@ export type SavedRowState = {
   rate:              number | null;
   amt:      number | null;
   checked:  boolean;
+  // ── New optional per-item dimension fields (on-screen entry only) ──
+  // Persisted into the JSONB rows column; absent on OLD quotations (left undefined).
+  // Never rendered in PDF/Excel export (those read only `size`).
+  mmInch?:  "MM" | "INCH";
+  dimL?:    string;
+  dimB?:    string;
+  dimH?:    string;
+  dimBS?:   string;
 };
 
 export type SavedQuotation = {
@@ -116,6 +124,13 @@ function normalizeSavedRows(items: unknown[]): SavedRowState[] {
       rate: rate !== null && Number.isFinite(rate) ? rate : null,
       amt: amount !== null && Number.isFinite(amount) ? amount : null,
       checked: row.checked !== false,
+      // Preserve new dimension fields through reload. Absent fields stay
+      // `undefined` so OLD rows carry no new keys and nothing changes for them.
+      mmInch: row.mmInch === "INCH" ? "INCH" : (row.mmInch === "MM" ? "MM" : undefined),
+      dimL: row.dimL !== undefined ? String(row.dimL) : undefined,
+      dimB: row.dimB !== undefined ? String(row.dimB) : undefined,
+      dimH: row.dimH !== undefined ? String(row.dimH) : undefined,
+      dimBS: row.dimBS !== undefined ? String(row.dimBS) : undefined,
     };
   });
 }
