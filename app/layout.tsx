@@ -6,6 +6,7 @@ import { QuotationProvider } from "@/context/QuotationContext";
 import AuthGuard from "@/components/AuthGuard";
 import PwaInstall from "@/components/PwaInstall";
 import ScheduledRefresh from "@/components/ScheduledRefresh";
+import VersionRefresh from "@/components/VersionRefresh";
 import EnterAsTab from "@/components/EnterAsTab";
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </AuthGuard>
           <PwaInstall />
           <ScheduledRefresh />
+          <VersionRefresh />
           <EnterAsTab />
         </AuthProvider>
       </body>
