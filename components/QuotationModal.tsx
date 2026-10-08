@@ -144,13 +144,14 @@ function composeSize(
     .map((v) => v + suffix);
   let size = parts.join("X");
   const bs = (dimBS ?? "").trim();
-  if (bs !== "") size += "+" + bs + suffix;
+  // Only append "+B/S" when B/S actually has a non-empty, non-zero value
+  if (bs !== "" && bs !== "0") size += "+" + bs + suffix;
   return size;
 }
 
 // computeTableRate: auto RATE for Table items only.
-//  - Returns null (do NOT auto-write) unless `desc` contains "table"
-//    (case-insensitive substring) AND Number(dimL) is finite and > 0.
+//  - Returns null (do NOT auto-write) unless the ITEM NAME is EXACTLY "table"
+//    (case-insensitive, trimmed). "Dish Landing Table" etc. must NOT trigger it.
 //  - feet = unit === "MM" ? Number(dimL)/304.8 : Number(dimL)/12  (1ft=304.8mm/12in)
 //  - roundedHalf = Math.round(feet*2)/2  (round to nearest 0.5 ft)
 //  - rate = roundedHalf * 4000  (returned as a string).
@@ -159,7 +160,8 @@ function computeTableRate(
   desc: string,
   dimL?: string
 ): string | null {
-  if (!desc || !desc.toLowerCase().includes("table")) return null;
+  // EXACT match only — item name must be just "table" (ignoring case/spaces)
+  if (!desc || desc.trim().toLowerCase() !== "table") return null;
   const l = Number((dimL ?? "").trim());
   if (!Number.isFinite(l) || l <= 0) return null;
   const feet = unit === "MM" ? l / 304.8 : l / 12;
@@ -1241,7 +1243,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             {/* ITEM CODE */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input value={row.itemCode}
-                                onChange={(e) => updateItemRow(row.uid,"itemCode",e.target.value)}
+                                onChange={(e) => updateItemRow(row.uid,"itemCode",e.target.value.toUpperCase())}
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono text-black" />
                             </td>
 
@@ -1462,7 +1464,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                               <tr key={row.uid} className="group hover:bg-indigo-50 transition-colors" style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}>
                                 <td className="border border-slate-100 px-1 py-1 text-center font-bold text-black">{row.slNo}</td>
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input value={row.itemCode} onChange={(e) => updatePartBRow(row.uid,"itemCode",e.target.value)}
+                                  <input value={row.itemCode} onChange={(e) => updatePartBRow(row.uid,"itemCode",e.target.value.toUpperCase())}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-mono text-black" />
                                 </td>
                                 <td className="border border-slate-100 px-1 py-1">
