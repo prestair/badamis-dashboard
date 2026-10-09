@@ -84,6 +84,8 @@ function fmtDate(dateStr: string): string {
 type QuotationItemName = {
   id: string;
   item_name: string;
+  rate?: number | null;
+  standard_rate?: number | null;
 };
 
 type RequesterEntry = {
@@ -103,17 +105,26 @@ type ItemRow = {
   qty:      string;
   additionalColumn: string;
   rate:     string;
-  // ── New optional on-screen dimension fields ──
-  // These feed the derived `size` string and (for Table items) the auto RATE.
-  // They are UI/entry-only and are EXCLUDED from the PDF/Excel export.
+  // ── On-screen dimension fields (UI/entry-only, EXCLUDED from normal PDF/Excel) ──
   mmInch?:  "MM" | "INCH";
   dimL?:    string;
   dimB?:    string;
   dimH?:    string;
   dimBS?:   string;
-  // UI-only flag (never persisted): true once the user manually types a RATE,
-  // which suppresses auto-recalc until the next dimension/unit change.
-  rateManual?: boolean;
+  // itemRate: per-foot rate SNAPSHOT taken from the Item Names table when the
+  //   item name is chosen. Read-only on screen, persisted on the row. Because it
+  //   lives on the row, changing the item's rate in the Item Names table later
+  //   NEVER affects old quotations — only new ones (or a row whose name is
+  //   actively re-selected during an edit) pick up the new rate.
+  itemRate?: string;
+  // stdRate: "Standard Rate" SNAPSHOT from the Item Names table — used for the
+  // Calculated Rate when SIZE is "STD" (no dimensions). Read-only, persisted.
+  stdRate?: string;
+  // calcRate: display-only "Calculated Rate".
+  //  - SIZE has dimensions → roundFeet(L) * itemRate (per-foot).
+  //  - SIZE is "STD" (no dims) → stdRate (standard rate) directly.
+  //   Snapshotted/persisted; recomputed only on an active edit, never on open.
+  calcRate?: string;
 };
 
 type Props = { onClose: () => void; initialData?: SavedQuotation | null; resumeDraft?: boolean };
@@ -134,55 +145,102 @@ function newUid() { return `row-${uidCounter++}`; }
 //           MM 1280/150/200/    -> "1280X150X200";
 //           INCH 53/28/34/4     -> 53"X28"X34"+4";  (all empty -> "")
 function composeSize(
-  unit: "MM" | "INCH",
+  unit: "MM" | "INCH" | "" | undefined,
   dimL?: string, dimB?: string, dimH?: string, dimBS?: string
 ): string {
   const suffix = unit === "INCH" ? "\"" : "";
-  const parts = [dimL, dimB, dimH]
-    .map((v) => (v ?? "").trim())
-    .filter((v) => v !== "")
-    .map((v) => v + suffix);
+  // Treat null/undefined and the literal strings "null"/"undefined" as blank.
+  const clean = (v?: string) => {
+    const s = (v ?? "").trim();
+    return s === "null" || s === "undefined" ? "" : s;
+  };
+  const l = clean(dimL);
+  // SIZE = "STD" only when BOTH MM/INCH and L are blank. (B/H/B/S are disabled
+  // while L is blank, so this reliably means "no dimensions entered".)
+  if (!unit && l === "") return "STD";
+  const lbh = [dimL, dimB, dimH].map(clean).filter((v) => v !== "");
+  const bs = clean(dimBS);
+  const parts = lbh.map((v) => v + suffix);
   let size = parts.join("X");
-  const bs = (dimBS ?? "").trim();
   // Only append "+B/S" when B/S actually has a non-empty, non-zero value
   if (bs !== "" && bs !== "0") size += "+" + bs + suffix;
   return size;
 }
 
-// computeTableRate: auto RATE for Table items only.
-//  - Returns null (do NOT auto-write) unless the ITEM NAME is EXACTLY "table"
-//    (case-insensitive, trimmed). "Dish Landing Table" etc. must NOT trigger it.
-//  - feet = unit === "MM" ? Number(dimL)/304.8 : Number(dimL)/12  (1ft=304.8mm/12in)
-//  - roundedHalf = Math.round(feet*2)/2  (round to nearest 0.5 ft)
-//  - rate = roundedHalf * 4000  (returned as a string).
-function computeTableRate(
-  unit: "MM" | "INCH",
-  desc: string,
-  dimL?: string
-): string | null {
-  // EXACT match only — item name must be just "table" (ignoring case/spaces)
-  if (!desc || desc.trim().toLowerCase() !== "table") return null;
-  const l = Number((dimL ?? "").trim());
-  if (!Number.isFinite(l) || l <= 0) return null;
+// computeCalcRate: the display-only "Calculated Rate" for ALL items (not just
+// "table"). It needs a valid L (>0) AND a per-foot itemRate on the row; if
+// either is missing it returns "" (blank).
+//  - Step 1: feet = unit === "MM" ? L/304.8 : L/12
+//  - Step 2: round to a WHOLE number of feet using a 0.25 cutoff:
+//            fractional part <= 0.25 → floor;  > 0.25 → ceil.
+//            e.g. 4.00–4.25 → 4,  4.26–5.00 → 5.
+//  - Step 3: calcRate = roundedFeet * itemRate (the ROW's snapshot rate, NOT
+//            the live Item Names table — keeps old quotations immutable).
+function computeCalcRate(row: ItemRow): string {
+  const unit: "MM" | "INCH" = row.mmInch === "INCH" ? "INCH" : "MM";
+  const l = Number((row.dimL ?? "").trim());
+  const hasL = Number.isFinite(l) && l > 0;
+
+  // SIZE = "STD" (no unit + no L) → Calculated Rate = the Standard Rate snapshot.
+  if (!row.mmInch && !hasL) {
+    const std = Number((row.stdRate ?? "").trim());
+    return Number.isFinite(std) && std > 0 ? String(std) : "";
+  }
+
+  // Otherwise per-foot formula using L and the Rate-Per-Foot snapshot.
+  if (!hasL) return "";
+  const perFoot = Number((row.itemRate ?? "").trim());
+  // Option X: no per-foot rate set → no calculated rate.
+  if (!Number.isFinite(perFoot) || perFoot <= 0) return "";
   const feet = unit === "MM" ? l / 304.8 : l / 12;
-  const roundedHalf = Math.round(feet * 2) / 2;
-  return String(roundedHalf * 4000);
+  const frac = feet - Math.floor(feet);
+  const roundedFeet = frac <= 0.25 ? Math.floor(feet) : Math.ceil(feet);
+  return String(roundedFeet * perFoot);
 }
 
-// recomputeDerived: PURE. Returns a new row with `size` recomposed and, for
-// Table items, `rate` auto-filled — UNLESS the user manually overrode RATE
-// (rateManual=true). Manual-override behaviour (requirement 6): rateManual is
-// set true when the user types in RATE, and reset to false whenever a
-// dimension/unit changes, so auto-calc resumes after the next dimension edit.
-// Section rows are returned unchanged.
+// recomputeDerived: PURE. Recomposes `size` and recomputes `calcRate` from the
+// row's OWN itemRate snapshot. NEVER touches the RATE column (RATE is fully
+// manual now). Called only on an active dimension/unit edit — opening a saved
+// quotation does NOT call this, so old rows keep stored size/calcRate verbatim.
 function recomputeDerived(row: ItemRow): ItemRow {
   if (row.rowType !== "item") return row;
-  const unit = row.mmInch === "INCH" ? "INCH" : "MM";
-  const size = composeSize(unit, row.dimL, row.dimB, row.dimH, row.dimBS);
-  const next: ItemRow = { ...row, size };
-  const auto = computeTableRate(unit, row.desc, row.dimL);
-  if (auto !== null && !row.rateManual) next.rate = auto;
+  const size = composeSize(row.mmInch, row.dimL, row.dimB, row.dimH, row.dimBS);
+  const next = { ...row, size };
+  next.calcRate = computeCalcRate(next);
   return next;
+}
+
+// hasAnyDim: true if the row has any dimension entered (L/B/H/B/S non-blank).
+// When false, SIZE shows "STD" and the MM/INCH dropdown shows blank.
+function hasAnyDim(row: ItemRow): boolean {
+  const vals = [row.dimL, row.dimB, row.dimH, row.dimBS].map((v) => (v ?? "").trim());
+  return vals.some((v) => v !== "" && v !== "0");
+}
+
+// lookupItemRate: per-foot rate for an item name from the loaded options
+// (trimmed, case-insensitive). Returns "" when the item has no rate set.
+function lookupItemRate(
+  desc: string,
+  options: { item_name: string; rate?: number | null }[]
+): string {
+  const key = (desc ?? "").trim().toLowerCase();
+  if (!key) return "";
+  const match = options.find((o) => o.item_name.trim().toLowerCase() === key);
+  const r = match?.rate;
+  return r !== undefined && r !== null && Number.isFinite(Number(r)) ? String(r) : "";
+}
+
+// lookupStdRate: Standard Rate for an item name (used when SIZE is "STD").
+// Returns "" when the item has no standard rate set.
+function lookupStdRate(
+  desc: string,
+  options: { item_name: string; standard_rate?: number | null }[]
+): string {
+  const key = (desc ?? "").trim().toLowerCase();
+  if (!key) return "";
+  const match = options.find((o) => o.item_name.trim().toLowerCase() === key);
+  const r = match?.standard_rate;
+  return r !== undefined && r !== null && Number.isFinite(Number(r)) ? String(r) : "";
 }
 
 function blankRow(slNo: number): ItemRow {
@@ -190,7 +248,8 @@ function blankRow(slNo: number): ItemRow {
     uid: newUid(), rowType: "item", sectionId: "", slNo: String(slNo),
     itemCode: "", desc: "", size: "", hsn: "", qty: "",
     additionalColumn: "", rate: "",
-    mmInch: "MM", dimL: "", dimB: "", dimH: "", dimBS: "", rateManual: false,
+    mmInch: undefined, dimL: "", dimB: "", dimH: "", dimBS: "",
+    itemRate: "", stdRate: "", calcRate: "",
   };
 }
 
@@ -231,11 +290,12 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
       size: row.size, hsn: row.hsn, qty: String(row.qty),
       additionalColumn: row.additionalColumn,
       rate: row.rate !== null ? String(row.rate) : "",
-      // Restore new dim fields verbatim; OLD rows default to blank + MM.
-      // IMPORTANT: do NOT recompute size/rate here — restored values stay as saved.
+      // Restore new fields verbatim; OLD rows default to blank + MM.
+      // IMPORTANT: do NOT recompute size/calcRate here — restored values stay as
+      // saved, so admin changing an item's rate later never alters this old row.
       mmInch: row.mmInch === "INCH" ? "INCH" : "MM",
       dimL: row.dimL ?? "", dimB: row.dimB ?? "", dimH: row.dimH ?? "", dimBS: row.dimBS ?? "",
-      rateManual: false,
+      itemRate: row.itemRate ?? "", stdRate: row.stdRate ?? "", calcRate: row.calcRate ?? "",
     };
   });
 }
@@ -320,11 +380,11 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
         size: row.size, hsn: row.hsn, qty: String(row.qty),
         additionalColumn: row.additionalColumn,
         rate: row.rate !== null ? String(row.rate) : "",
-        // Restore new dim fields verbatim; OLD rows default to blank + MM.
-        // IMPORTANT: do NOT recompute size/rate here — restored values stay as saved.
+        // Restore new fields verbatim; OLD rows default to blank + MM.
+        // Do NOT recompute here — restored values stay as saved.
         mmInch: row.mmInch === "INCH" ? "INCH" : "MM",
         dimL: row.dimL ?? "", dimB: row.dimB ?? "", dimH: row.dimH ?? "", dimBS: row.dimBS ?? "",
-        rateManual: false,
+        itemRate: row.itemRate ?? "", stdRate: row.stdRate ?? "", calcRate: row.calcRate ?? "",
       };
     });
   });
@@ -490,23 +550,31 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
   }, [saved, draftKey]);
 
   // ── Row helpers ────────────────────────────────────────────────────────────
-  // Apply a single field edit to a row and recompute derived values (size + Table
-  // rate) when the edit affects them. Shared by Part A and Part B mutators.
-  //  - dimension/unit edit (mmInch/dimL/dimB/dimH/dimBS): reset rateManual=false
-  //    (re-enable auto-calc per req 6) then recomputeDerived.
-  //  - rate edit: set rateManual=true (manual override), no recompute.
-  //  - desc edit: recomputeDerived (so adding/removing "table" re-evaluates auto rate).
-  //  - any other field: plain assignment, as before.
+  // Apply a single field edit to a row and recompute derived values (size +
+  // calcRate) when the edit affects them. Shared by Part A and Part B mutators.
+  //  - dimension/unit edit (mmInch/dimL/dimB/dimH/dimBS): recomputeDerived
+  //    (recomposes size + recomputes calcRate from the row's OWN itemRate).
+  //  - desc (item name) edit: refresh the itemRate SNAPSHOT from the live Item
+  //    Names table (this is the ONE place that pulls the current table rate),
+  //    then recompute size + calcRate. This is why only an active name change
+  //    picks up a new rate — old rows opened untouched keep their snapshot.
+  //  - rate edit: plain manual assignment (RATE is fully manual now).
+  //  - any other field: plain assignment.
   function applyRowEdit(r: ItemRow, field: Exclude<keyof ItemRow, "rowType">, value: string): ItemRow {
     if (r.rowType === "section") return { ...r, [field]: value };
     if (field === "mmInch" || field === "dimL" || field === "dimB" || field === "dimH" || field === "dimBS") {
-      return recomputeDerived({ ...r, [field]: value, rateManual: false });
-    }
-    if (field === "rate") {
-      return { ...r, rate: value, rateManual: true };
+      const updated = { ...r, [field]: value };
+      // When L is cleared, B/H/B/S are disabled → also clear their values so no
+      // stale dimension lingers behind a disabled input.
+      if (field === "dimL" && !value.trim()) {
+        updated.dimB = ""; updated.dimH = ""; updated.dimBS = "";
+      }
+      return recomputeDerived(updated);
     }
     if (field === "desc") {
-      return recomputeDerived({ ...r, desc: value });
+      const itemRate = lookupItemRate(value, itemNameOptions);
+      const stdRate = lookupStdRate(value, itemNameOptions);
+      return recomputeDerived({ ...r, desc: value, itemRate, stdRate });
     }
     return { ...r, [field]: value };
   }
@@ -734,8 +802,10 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
       return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
                section: "Custom", qty, additionalColumn: r.additionalColumn,
                discount: 0, discountIsPerUnit: false, rate, amt, checked: true,
-               // Persist the new dim fields (NOT the UI-only rateManual flag).
-               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "" };
+               // Persist dim fields + itemRate/stdRate/calcRate SNAPSHOT so old
+               // quotations stay immutable when the Item Names rates change later.
+               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "",
+               itemRate: r.itemRate ?? "", stdRate: r.stdRate ?? "", calcRate: r.calcRate ?? "" };
     });
 
     const savedPartBRows: SavedRowState[] = partBItemRows.map((r) => {
@@ -753,8 +823,9 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
       return { id: r.itemCode || r.slNo, rowType: "item", desc: r.desc, size: r.size, hsn: r.hsn,
                section: "Custom", qty, additionalColumn: r.additionalColumn,
                discount: 0, discountIsPerUnit: false, rate, amt, checked: true,
-               // Persist the new dim fields (NOT the UI-only rateManual flag).
-               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "" };
+               // Persist dim fields + itemRate/stdRate/calcRate SNAPSHOT (immutability).
+               mmInch: r.mmInch ?? "MM", dimL: r.dimL ?? "", dimB: r.dimB ?? "", dimH: r.dimH ?? "", dimBS: r.dimBS ?? "",
+               itemRate: r.itemRate ?? "", stdRate: r.stdRate ?? "", calcRate: r.calcRate ?? "" };
     });
 
     // Ensure requester initials are present in quotation no even if user
@@ -788,10 +859,13 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
         await updateQuotation(existingDbId, payload, actorName);
         if (isEdit && initialData) setSavedSerial(initialData.serialNo);
       } else {
-        // First save of a brand-new quotation → create it, then remember its id
+        // First save of a brand-new quotation → create it, then remember its id.
+        // The SERVER assigns the final quotation number (duplicate-proof), so
+        // sync our field to whatever it returned.
         const created = await saveQuotationFull(payload, actorName);
         setSavedSerial(created.serialNo);
         setSavedDbId(created.dbId);
+        if (created.quotationNo) setQuotationNo(created.quotationNo);
       }
       setSaved(true);
       // Do NOT auto-close: keep the modal open so the user can now download
@@ -964,13 +1038,21 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
-                          Quotation No.{canEditQuotationNumber ? "" : " (Admin)"}
+                          Quotation No.{isEdit ? (canEditQuotationNumber ? "" : " (Admin)") : " (allocated on save)"}
                         </label>
-                        <input value={quotationNo}
+                        {/* NEW quotation: field is blank & disabled on screen until saved.
+                            The real prefix+initials stay in `quotationNo` behind the scenes;
+                            the server allocates the final number on save (duplicate-proof).
+                            EDIT: unchanged (admin may edit). */}
+                        <input value={(!isEdit && !saved) ? "" : quotationNo}
                           onChange={(e) => setQuotationNo(e.target.value)}
-                          readOnly={!canEditQuotationNumber}
-                          title={canEditQuotationNumber ? "Quotation number" : "Only admin can edit"}
-                          className={`${inp()} mt-1 ${!canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`} />
+                          readOnly={isEdit ? !canEditQuotationNumber : true}
+                          disabled={!isEdit && !saved}
+                          placeholder={(!isEdit && !saved) ? "Allocated on save" : undefined}
+                          title={isEdit
+                            ? (canEditQuotationNumber ? "Quotation number" : "Only admin can edit")
+                            : "The quotation number is assigned automatically when you save."}
+                          className={`${inp()} mt-1 ${(!isEdit && !saved) || !canEditQuotationNumber ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""}`} />
                       </div>
                     </div>
                   </div>
@@ -1185,6 +1267,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
+                        <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:90}}>CALC.<br/>RATE</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:100}}>RATE (₹)</th>
                         <th className="border border-slate-600 px-2 py-2.5 text-right" style={{width:110}}>AMOUNT (₹)</th>
                         <th className="border border-slate-600 px-1 py-2.5 text-center" style={{width:44}}>↕</th>
@@ -1197,7 +1280,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         if (row.rowType === "section") {
                           return (
                             <tr key={row.uid} className="group bg-blue-50">
-                              <td colSpan={14} className="border border-blue-200 px-3 py-2">
+                              <td colSpan={15} className="border border-blue-200 px-3 py-2">
                                 <div className="flex items-center gap-3">
                                   <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-blue-700">Section</span>
                                   <input
@@ -1265,9 +1348,10 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
 
                             {/* MM/INCH */}
                             <td className="border border-slate-100 px-1 py-1">
-                              <select value={row.mmInch ?? "MM"}
+                              <select value={row.mmInch ?? ""}
                                 onChange={(e) => updateItemRow(row.uid,"mmInch",e.target.value)}
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black">
+                                <option value=""></option>
                                 <option value="MM">MM</option>
                                 <option value="INCH">INCH</option>
                               </select>
@@ -1280,25 +1364,28 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
                             </td>
 
-                            {/* B */}
+                            {/* B — disabled until L is filled */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input inputMode="decimal" value={row.dimB ?? ""}
+                                disabled={!(row.dimL ?? "").trim()}
                                 onChange={(e) => updateItemRow(row.uid,"dimB",e.target.value)}
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                             </td>
 
-                            {/* H */}
+                            {/* H — disabled until L is filled */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input inputMode="decimal" value={row.dimH ?? ""}
+                                disabled={!(row.dimL ?? "").trim()}
                                 onChange={(e) => updateItemRow(row.uid,"dimH",e.target.value)}
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                             </td>
 
-                            {/* B/S */}
+                            {/* B/S — disabled until L is filled */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input inputMode="decimal" value={row.dimBS ?? ""}
+                                disabled={!(row.dimL ?? "").trim()}
                                 onChange={(e) => updateItemRow(row.uid,"dimBS",e.target.value)}
-                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black" />
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                             </td>
 
                             {/* SIZE — derived (read-only), composed from L/B/H/B/S */}
@@ -1324,7 +1411,14 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 font-semibold text-black" />
                             </td>
 
-                            {/* RATE */}
+                            {/* CALCULATED RATE — read-only, Table items only */}
+                            <td className="border border-slate-100 px-1 py-1">
+                              <input value={row.calcRate ?? ""} readOnly tabIndex={-1}
+                                title="Auto-calculated from L and the item's per-foot rate (read-only)"
+                                className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs bg-amber-50 text-slate-700 cursor-default font-mono focus:outline-none" />
+                            </td>
+
+                            {/* RATE — fully manual */}
                             <td className="border border-slate-100 px-1 py-1">
                               <input type="number" min={0} value={row.rate}
                                 onChange={(e) => updateItemRow(row.uid,"rate",e.target.value)}
@@ -1364,7 +1458,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                         if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
                           acc.push(
                             <tr key={`insert-after-${row.uid}`} className="bg-slate-50/50">
-                              <td colSpan={16} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                              <td colSpan={17} className="border border-dashed border-slate-200 px-3 py-1 text-center">
                                 <button type="button" onClick={() => insertRowAfter(idx)}
                                   className="text-[10px] font-bold text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-3 py-0.5 rounded transition-colors"
                                   title="Insert row here">
@@ -1422,6 +1516,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:100}}>SIZE</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:80}}>HSN CODE</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-center" style={{width:52}}>QTY</th>
+                            <th className="border border-indigo-600 px-2 py-2.5 text-right" style={{width:90}}>CALC.<br/>RATE</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-right" style={{width:100}}>RATE (₹)</th>
                             <th className="border border-indigo-600 px-2 py-2.5 text-right" style={{width:110}}>AMOUNT (₹)</th>
                             <th className="border border-indigo-600 px-1 py-2.5 text-center" style={{width:44}}>↕</th>
@@ -1434,7 +1529,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             if (row.rowType === "section") {
                               return (
                                 <tr key={row.uid} className="group bg-indigo-50">
-                                  <td colSpan={14} className="border border-indigo-200 px-3 py-2">
+                                  <td colSpan={15} className="border border-indigo-200 px-3 py-2">
                                     <div className="flex items-center gap-3">
                                       <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-indigo-700">Section</span>
                                       <input
@@ -1478,8 +1573,9 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 </td>
                                 {/* MM/INCH */}
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <select value={row.mmInch ?? "MM"} onChange={(e) => updatePartBRow(row.uid,"mmInch",e.target.value)}
+                                  <select value={row.mmInch ?? ""} onChange={(e) => updatePartBRow(row.uid,"mmInch",e.target.value)}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black">
+                                    <option value=""></option>
                                     <option value="MM">MM</option>
                                     <option value="INCH">INCH</option>
                                   </select>
@@ -1489,20 +1585,20 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                   <input inputMode="decimal" value={row.dimL ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimL",e.target.value)}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
                                 </td>
-                                {/* B */}
+                                {/* B — disabled until L is filled */}
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input inputMode="decimal" value={row.dimB ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimB",e.target.value)}
-                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                  <input inputMode="decimal" value={row.dimB ?? ""} disabled={!(row.dimL ?? "").trim()} onChange={(e) => updatePartBRow(row.uid,"dimB",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                                 </td>
-                                {/* H */}
+                                {/* H — disabled until L is filled */}
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input inputMode="decimal" value={row.dimH ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimH",e.target.value)}
-                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                  <input inputMode="decimal" value={row.dimH ?? ""} disabled={!(row.dimL ?? "").trim()} onChange={(e) => updatePartBRow(row.uid,"dimH",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                                 </td>
-                                {/* B/S */}
+                                {/* B/S — disabled until L is filled */}
                                 <td className="border border-slate-100 px-1 py-1">
-                                  <input inputMode="decimal" value={row.dimBS ?? ""} onChange={(e) => updatePartBRow(row.uid,"dimBS",e.target.value)}
-                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black" />
+                                  <input inputMode="decimal" value={row.dimBS ?? ""} disabled={!(row.dimL ?? "").trim()} onChange={(e) => updatePartBRow(row.uid,"dimBS",e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 text-black disabled:bg-slate-100 disabled:cursor-not-allowed" />
                                 </td>
                                 {/* SIZE — derived (read-only), composed from L/B/H/B/S */}
                                 <td className="border border-slate-100 px-1 py-1">
@@ -1518,6 +1614,12 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                                 <td className="border border-slate-100 px-1 py-1">
                                   <input type="number" min={0} value={row.qty} onChange={(e) => updatePartBRow(row.uid,"qty",e.target.value)}
                                     className="w-full border border-slate-200 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 font-semibold text-black" />
+                                </td>
+                                {/* CALCULATED RATE — read-only, Table items only */}
+                                <td className="border border-slate-100 px-1 py-1">
+                                  <input value={row.calcRate ?? ""} readOnly tabIndex={-1}
+                                    title="Auto-calculated from L and the item's per-foot rate (read-only)"
+                                    className="w-full border border-slate-200 rounded px-1 py-0.5 text-right text-xs bg-amber-50 text-slate-700 cursor-default font-mono focus:outline-none" />
                                 </td>
                                 <td className="border border-slate-100 px-1 py-1">
                                   <input type="number" min={0} value={row.rate} onChange={(e) => updatePartBRow(row.uid,"rate",e.target.value)}
@@ -1547,7 +1649,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                             if (row.rowType === "item" && (!nextRow || nextRow.rowType === "section")) {
                               acc.push(
                                 <tr key={`insert-b-after-${row.uid}`} className="bg-slate-50/50">
-                                  <td colSpan={16} className="border border-dashed border-slate-200 px-3 py-1 text-center">
+                                  <td colSpan={17} className="border border-dashed border-slate-200 px-3 py-1 text-center">
                                     <button type="button" onClick={() => insertPartBRowAfter(idx)}
                                       className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 px-3 py-0.5 rounded transition-colors">
                                       + Add Row

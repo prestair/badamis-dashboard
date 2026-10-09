@@ -26,7 +26,7 @@ export async function GET() {
     if (supabase) {
       const { data, error } = await supabase
         .from("quotation_item_names")
-        .select("id, item_name, created_at, updated_at")
+        .select("id, item_name, rate, standard_rate, created_at, updated_at")
         .order("item_name", { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data ?? []);
@@ -52,6 +52,17 @@ export async function POST(request: Request) {
     const invalid = validationError(itemName);
     if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
+    // Per-foot rate — optional. Blank/absent → stored as null (no default).
+    const rawRate = Number(body.rate);
+    const rate = body.rate !== undefined && body.rate !== "" && Number.isFinite(rawRate) && rawRate >= 0
+      ? rawRate
+      : null;
+    // Standard rate — optional, same blank handling.
+    const rawStd = Number(body.standardRate);
+    const standardRate = body.standardRate !== undefined && body.standardRate !== "" && Number.isFinite(rawStd) && rawStd >= 0
+      ? rawStd
+      : null;
+
     const publicSupabase = getSupabaseClient();
     if (publicSupabase) {
       const adminSupabase = getSupabaseAdminClient();
@@ -63,8 +74,8 @@ export async function POST(request: Request) {
       }
       const { data, error } = await adminSupabase
         .from("quotation_item_names")
-        .insert({ item_name: itemName })
-        .select("id, item_name, created_at, updated_at")
+        .insert({ item_name: itemName, rate, standard_rate: standardRate })
+        .select("id, item_name, rate, standard_rate, created_at, updated_at")
         .single();
       if (error?.code === "23505") {
         return NextResponse.json({ error: "This Item Name already exists." }, { status: 409 });
@@ -73,7 +84,7 @@ export async function POST(request: Request) {
       return NextResponse.json(data, { status: 201 });
     }
 
-    const created = createItemName(itemName);
+    const created = createItemName(itemName, rate ?? undefined, standardRate ?? undefined);
     if (!created) {
       return NextResponse.json({ error: "This Item Name already exists." }, { status: 409 });
     }

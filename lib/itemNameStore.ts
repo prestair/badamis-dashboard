@@ -7,6 +7,8 @@ const FALLBACK_PATH = path.join(process.cwd(), "data", "quotation-item-names.jso
 export type StoredQuotationItemName = {
   id: string;
   item_name: string;
+  rate: number | null;
+  standard_rate: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,13 +44,19 @@ export function readItemNames(): StoredQuotationItemName[] {
         !!entry && typeof entry === "object" &&
         typeof entry.id === "string" && typeof entry.item_name === "string"
       ))
+      // Old entries that predate the rate fields stay blank (null).
+      .map((entry) => ({
+        ...entry,
+        rate: entry.rate === null || entry.rate === undefined ? null : (Number.isFinite(Number(entry.rate)) ? Number(entry.rate) : null),
+        standard_rate: entry.standard_rate === null || entry.standard_rate === undefined ? null : (Number.isFinite(Number(entry.standard_rate)) ? Number(entry.standard_rate) : null),
+      }))
       .sort((left, right) => left.item_name.localeCompare(right.item_name));
   } catch {
     return [];
   }
 }
 
-export function createItemName(itemName: string): StoredQuotationItemName | null {
+export function createItemName(itemName: string, rate?: number, standardRate?: number): StoredQuotationItemName | null {
   const entries = readItemNames();
   if (entries.some((entry) => entry.item_name.toLocaleLowerCase() === itemName.toLocaleLowerCase())) {
     return null;
@@ -58,6 +66,8 @@ export function createItemName(itemName: string): StoredQuotationItemName | null
   const created = {
     id: crypto.randomUUID(),
     item_name: itemName,
+    rate: rate !== undefined && Number.isFinite(rate) && rate >= 0 ? rate : null,
+    standard_rate: standardRate !== undefined && Number.isFinite(standardRate) && standardRate >= 0 ? standardRate : null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -65,7 +75,7 @@ export function createItemName(itemName: string): StoredQuotationItemName | null
   return created;
 }
 
-export function updateItemName(id: string, itemName: string): StoredQuotationItemName | null {
+export function updateItemName(id: string, itemName: string, rate?: number, standardRate?: number): StoredQuotationItemName | null {
   const entries = readItemNames();
   const index = entries.findIndex((entry) => entry.id === id);
   if (index === -1) return null;
@@ -73,7 +83,13 @@ export function updateItemName(id: string, itemName: string): StoredQuotationIte
     return null;
   }
 
-  const updated = { ...entries[index], item_name: itemName, updated_at: new Date().toISOString() };
+  const updated = {
+    ...entries[index],
+    item_name: itemName,
+    rate: rate !== undefined && Number.isFinite(rate) && rate >= 0 ? rate : entries[index].rate ?? null,
+    standard_rate: standardRate !== undefined && Number.isFinite(standardRate) && standardRate >= 0 ? standardRate : entries[index].standard_rate ?? null,
+    updated_at: new Date().toISOString(),
+  };
   entries[index] = updated;
   writeItemNames(entries);
   return updated;

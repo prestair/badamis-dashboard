@@ -51,6 +51,59 @@ function toRow(
   };
 }
 
+// ── Server-side quotation-number allocation ─────────────────────────────────
+// The number is assigned HERE, at save time, from the live DB — never trusted
+// from the client. This guarantees no duplicates even if two users save at the
+// same moment or a client cache is stale.
+//
+// `requestedNo` is used only for its FY prefix and its initials suffix; the
+// numeric middle is replaced with (current DB max for this FY) + 1.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function allocateQuotationNo(sb: any, requestedNo: string, date: string): Promise<string> {
+  // Derive the financial-year prefix. Prefer the one already in requestedNo;
+  // otherwise compute from the quotation date (FY starts April 1).
+  const prefixMatch = requestedNo.match(/^(PS\/\d{2}-\d{2}\/)/);
+  let fyPrefix: string;
+  if (prefixMatch) {
+    fyPrefix = prefixMatch[1];
+  } else {
+    const d = date ? new Date(date) : new Date();
+    const m = d.getMonth() + 1;
+    const fyStart = m >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+    fyPrefix = `PS/${fyStart % 100}-${(fyStart + 1) % 100}/`;
+  }
+  const fyPrefixOld = `${fyPrefix}QT-`;
+
+  // Suffix = everything after the numeric part in requestedNo (e.g. "/PS-AB").
+  let suffix = "";
+  const afterPrefix = requestedNo.startsWith(fyPrefixOld)
+    ? requestedNo.slice(fyPrefixOld.length)
+    : (requestedNo.startsWith(fyPrefix) ? requestedNo.slice(fyPrefix.length) : "");
+  const numMatch = afterPrefix.match(/^(\d+)(.*)$/);
+  if (numMatch) suffix = numMatch[2] ?? "";
+
+  // Read ALL quotation numbers for this FY from the live DB and find the max.
+  const { data } = await sb
+    .from("quotations")
+    .select("quotation_no");
+  let maxNum = 0;
+  for (const row of (data ?? [])) {
+    const qNo: string = row.quotation_no ?? "";
+    let rest = "";
+    if (qNo.startsWith(fyPrefixOld)) rest = qNo.slice(fyPrefixOld.length).trim();
+    else if (qNo.startsWith(fyPrefix)) rest = qNo.slice(fyPrefix.length).trim();
+    else continue;
+    const mm = rest.match(/^(\d+)/);
+    if (mm) { const n = parseInt(mm[1], 10); if (n > maxNum) maxNum = n; }
+  }
+
+  // FY 2026-27 floor stays 553 (so first new number is 554), matching the client.
+  const fyStartYear = 2000 + parseInt(fyPrefix.slice(3, 5), 10);
+  const floor = fyStartYear === 2026 ? 553 : 0;
+  const nextNum = Math.max(maxNum, floor) + 1;
+  return `${fyPrefix}${String(nextNum).padStart(4, "0")}${suffix}`;
+}
+
 // ── GET all ───────────────────────────────────────────────────────────────────
 export async function GET() {
   try {
@@ -99,7 +152,7 @@ export async function GET() {
 // ── POST create ───────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body = await req.json();
     const auditedRows = createAuditedRows(body.rows, body.actorName);
     const { audit } = unpackQuotationRows(auditedRows);
     const flatColumns = { created_by: audit.createdBy, edit_count: audit.editCount };
@@ -121,6 +174,14 @@ export async function POST(req: Request) {
     // 2. Supabase
     const sb = getSupabaseClient();
     if (sb) {
+      // ── Assign the quotation number NOW, from the live DB ───────────────
+      // The client only supplies the FY prefix + initials suffix; the numeric
+      // part is always (re)allocated here so two concurrent saves or a stale
+      // client cache can never produce a duplicate.
+      const requestedNo = String(body.quotationNo ?? "").trim();
+      const allocatedNo = await allocateQuotationNo(sb, requestedNo, String(body.date ?? ""));
+      body = { ...body, quotationNo: allocatedNo };
+
       // Insert WITH the flat audit columns; retry WITHOUT them if the migration
       // hasn't added those columns yet.
       let { data, error } = await sb

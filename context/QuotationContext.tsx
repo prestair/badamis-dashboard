@@ -34,6 +34,12 @@ export type SavedRowState = {
   dimB?:    string;
   dimH?:    string;
   dimBS?:   string;
+  // Per-foot rate snapshot taken from the Item Names table at save time, and the
+  // derived Calculated Rate. Persisted so changing an item's rate later never
+  // alters old quotations. Absent on old rows. Excluded from normal PDF/Excel.
+  itemRate?: string;
+  stdRate?: string;
+  calcRate?: string;
 };
 
 export type SavedQuotation = {
@@ -132,6 +138,9 @@ function normalizeSavedRows(items: unknown[]): SavedRowState[] {
       dimB: row.dimB !== undefined ? String(row.dimB) : undefined,
       dimH: row.dimH !== undefined ? String(row.dimH) : undefined,
       dimBS: row.dimBS !== undefined ? String(row.dimBS) : undefined,
+      itemRate: row.itemRate !== undefined ? String(row.itemRate) : undefined,
+      stdRate: row.stdRate !== undefined ? String(row.stdRate) : undefined,
+      calcRate: row.calcRate !== undefined ? String(row.calcRate) : undefined,
     };
   });
 }

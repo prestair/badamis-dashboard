@@ -34,6 +34,23 @@ export async function PUT(
       );
     }
 
+    // Per-foot rate. Explicit empty string "" → clear to null (blank).
+    // A valid number → set it. Field absent → leave unchanged.
+    const rateProvided = body.rate !== undefined;
+    const rawRate = Number(body.rate);
+    const rateValue: number | null =
+      body.rate === "" || body.rate === null
+        ? null
+        : (Number.isFinite(rawRate) && rawRate >= 0 ? rawRate : null);
+
+    // Standard rate — same handling.
+    const stdProvided = body.standardRate !== undefined;
+    const rawStd = Number(body.standardRate);
+    const stdValue: number | null =
+      body.standardRate === "" || body.standardRate === null
+        ? null
+        : (Number.isFinite(rawStd) && rawStd >= 0 ? rawStd : null);
+
     const publicSupabase = getSupabaseClient();
     if (publicSupabase) {
       const adminSupabase = getSupabaseAdminClient();
@@ -43,11 +60,18 @@ export async function PUT(
           { status: 503 }
         );
       }
+      const updatePayload: Record<string, unknown> = {
+        item_name: itemName,
+        updated_at: new Date().toISOString(),
+      };
+      if (rateProvided) updatePayload.rate = rateValue;
+      if (stdProvided) updatePayload.standard_rate = stdValue;
+
       const { data, error } = await adminSupabase
         .from("quotation_item_names")
-        .update({ item_name: itemName, updated_at: new Date().toISOString() })
+        .update(updatePayload)
         .eq("id", id)
-        .select("id, item_name, created_at, updated_at")
+        .select("id, item_name, rate, standard_rate, created_at, updated_at")
         .single();
       if (error?.code === "23505") {
         return NextResponse.json({ error: "This Item Name already exists." }, { status: 409 });
@@ -59,7 +83,7 @@ export async function PUT(
       return NextResponse.json(data);
     }
 
-    const updated = updateItemName(id, itemName);
+    const updated = updateItemName(id, itemName, rateProvided ? (rateValue ?? undefined) : undefined, stdProvided ? (stdValue ?? undefined) : undefined);
     if (!updated) {
       return NextResponse.json(
         { error: "Item Name was not found or the new value already exists." },

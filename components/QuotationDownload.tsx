@@ -23,6 +23,9 @@ type Props = {
   partBRows?:    RowData[];
   grossB?:       number;
   afterDiscountB?: number;
+  // When true, the PDF includes the internal columns (L, B, H, B/S, MM/INCH,
+  // Rate From Item Name, Calculated Rate) for the "Print for Approval" sheet.
+  approval?:     boolean;
 };
 
 type RowData = {
@@ -30,6 +33,10 @@ type RowData = {
   slNo: string; itemCode: string; desc: string; size: string;
   hsn: string; qty: string; additionalColumn: string; rate: string; amt: number | null;
   section?: string;
+  // Approval-only extra fields (shown ONLY in "Print for Approval", never in the
+  // normal customer PDF/Excel). Optional so normal callers can omit them.
+  mmInch?: string; dimL?: string; dimB?: string; dimH?: string; dimBS?: string;
+  itemRate?: string; calcRate?: string;
 };
 
 // Filter out sections that have no items after them (before next section or end)
@@ -59,6 +66,14 @@ function fmtDateDisplay(dateStr: string): string {
 }
 
 const fmtNum = (n: number) => n.toLocaleString("en-IN");
+
+// Clean a cell value for display: turn null/undefined and the literal strings
+// "null"/"undefined" into a blank, so stray "null" never prints in the PDF.
+function cleanCell(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  return s === "null" || s === "undefined" ? "" : s;
+}
 
 // Detect section from item code prefix
 function detectSection(itemCode: string): string {
@@ -532,8 +547,11 @@ async function buildQuotationPDF(props: Props) {
     // Keep bottom margin safe for page 2+ footer logos (drawn later). Page 1's extra
     // free space is used by the totals/terms logic via pageBottom().
     margin: { left: ML, right: ML, bottom: 24 },
-    head: [["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
+    head: [props.approval
+      ? ["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "MM/\nINCH", "L", "B", "H", "B/S", "RATE FROM\nITEM NAME", "SIZE", "H.S.N\nCODE", "QTY", "CALC.\nRATE", "RATE", "AMOUNT"]
+      : ["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
     body: (() => {
+      const nCols = props.approval ? 16 : 9;
       const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
       let lastSection = "";
       let insideExplicitSection = false;
@@ -545,7 +563,7 @@ async function buildQuotationPDF(props: Props) {
           const heading = (r.desc || r.section || "Untitled Section").toUpperCase();
           body.push([{
             content: heading,
-            colSpan: 9,
+            colSpan: nCols,
             styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [239, 246, 255], textColor: [30, 64, 175] },
           }] as unknown as string[]);
           lastSection = "";
@@ -557,23 +575,42 @@ async function buildQuotationPDF(props: Props) {
         if (section && section !== lastSection) {
           body.push([{
             content: section.toUpperCase(),
-            colSpan: 9,
+            colSpan: nCols,
             styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
           }] as unknown as string[]);
           lastSection = section;
         }
         slNo++;
-        body.push([
-          String(slNo),
-          r.itemCode || "",
-          r.desc || "",
-          r.additionalColumn || "",
-          r.size || "",
-          r.hsn || "",
-          r.qty || "1",
-          r.rate || "NQ",
-          r.amt !== null ? fmtNum(r.amt) : "NQ",
-        ]);
+        body.push(props.approval
+          ? [
+              String(slNo),
+              cleanCell(r.itemCode),
+              cleanCell(r.desc),
+              cleanCell(r.additionalColumn),
+              cleanCell(r.mmInch),
+              cleanCell(r.dimL),
+              cleanCell(r.dimB),
+              cleanCell(r.dimH),
+              cleanCell(r.dimBS),
+              cleanCell(r.itemRate),
+              cleanCell(r.size),
+              cleanCell(r.hsn),
+              cleanCell(r.qty) || "1",
+              cleanCell(r.calcRate),
+              cleanCell(r.rate) || "NQ",
+              r.amt !== null ? fmtNum(r.amt) : "NQ",
+            ]
+          : [
+              String(slNo),
+              cleanCell(r.itemCode),
+              cleanCell(r.desc),
+              cleanCell(r.additionalColumn),
+              cleanCell(r.size),
+              cleanCell(r.hsn),
+              cleanCell(r.qty) || "1",
+              cleanCell(r.rate) || "NQ",
+              r.amt !== null ? fmtNum(r.amt) : "NQ",
+            ]);
       });
       return body;
     })(),
@@ -597,26 +634,33 @@ async function buildQuotationPDF(props: Props) {
       cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
       valign: "middle",
     },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 14, halign: "center" },
-      2: { cellWidth: 16, halign: "center" },
-      3: { cellWidth: 58, halign: "left" },
-      4: { cellWidth: 28, halign: "center" },
-      5: { cellWidth: 18, halign: "center" },
-      6: { cellWidth: 10, halign: "center" },
-      7: { cellWidth: 16, halign: "center" },
-      8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
-    },
+    columnStyles: props.approval
+      ? {
+          // 16 columns — let autoTable auto-distribute; keep description widest.
+          3: { halign: "left", cellWidth: 34 },
+          15: { halign: "center", fontStyle: "bold" },
+        }
+      : {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 14, halign: "center" },
+          2: { cellWidth: 16, halign: "center" },
+          3: { cellWidth: 58, halign: "left" },
+          4: { cellWidth: 28, halign: "center" },
+          5: { cellWidth: 18, halign: "center" },
+          6: { cellWidth: 10, halign: "center" },
+          7: { cellWidth: 16, halign: "center" },
+          8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+        },
     rowPageBreak: "avoid",
     tableWidth: CW,
     theme: "grid",
+    styles: props.approval ? { fontSize: 6.5, cellPadding: { top: 1, bottom: 1, left: 1, right: 1 } } : undefined,
     didParseCell: (data) => {
       if (data.section === "head") {
         data.cell.styles.fillColor = [200, 200, 200];
         data.cell.styles.textColor = [0, 0, 0];
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fontSize = 9.5;
+        data.cell.styles.fontSize = props.approval ? 6.5 : 9.5;
       }
     },
     didDrawPage: (data) => {
@@ -689,26 +733,36 @@ async function buildQuotationPDF(props: Props) {
 
     autoTable(doc, {
       startY: ty, margin: { left: ML, right: ML },
-      head: [["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
+      head: [props.approval
+        ? ["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "MM/\nINCH", "L", "B", "H", "B/S", "RATE FROM\nITEM NAME", "SIZE", "H.S.N\nCODE", "QTY", "CALC.\nRATE", "RATE", "AMOUNT"]
+        : ["SL NO", "ITEM\nCODE", "ITEM NAME", "ADDITIONAL\nDESCRIPTION", "SIZE", "H.S.N\nCODE", "QTY", "RATE", "AMOUNT"]],
       body: (() => {
+        const nColsB = props.approval ? 16 : 9;
         const body: (string | { content: string; colSpan: number; styles: object })[][] = [];
         let slNo = 0;
         const filteredBRows = filterEmptySections(props.partBRows!);
         filteredBRows.forEach((r) => {
           if (r.rowType === "section") {
-            body.push([{ content: (r.desc || r.section || "").toUpperCase(), colSpan: 9,
+            body.push([{ content: (r.desc || r.section || "").toUpperCase(), colSpan: nColsB,
               styles: { halign: "center" as const, fontStyle: "bold" as const, fontSize: 8, fillColor: [239, 246, 255], textColor: [30, 64, 175] },
             }] as unknown as string[]); return;
           }
           slNo++;
-          body.push([String(slNo), r.itemCode || "", r.desc || "", r.additionalColumn || "",
-            r.size || "", r.hsn || "", r.qty || "1", r.rate || "NQ", r.amt !== null ? fmtNum(r.amt) : "NQ"]);
+          body.push(props.approval
+            ? [String(slNo), cleanCell(r.itemCode), cleanCell(r.desc), cleanCell(r.additionalColumn),
+               cleanCell(r.mmInch), cleanCell(r.dimL), cleanCell(r.dimB), cleanCell(r.dimH), cleanCell(r.dimBS), cleanCell(r.itemRate),
+               cleanCell(r.size), cleanCell(r.hsn), cleanCell(r.qty) || "1", cleanCell(r.calcRate), cleanCell(r.rate) || "NQ", r.amt !== null ? fmtNum(r.amt) : "NQ"]
+            : [String(slNo), cleanCell(r.itemCode), cleanCell(r.desc), cleanCell(r.additionalColumn),
+               cleanCell(r.size), cleanCell(r.hsn), cleanCell(r.qty) || "1", cleanCell(r.rate) || "NQ", r.amt !== null ? fmtNum(r.amt) : "NQ"]);
         });
         return body;
       })(),
-      headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 9.5, lineWidth: 0.15, lineColor: [0, 0, 0], halign: "center", valign: "middle", cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 } },
+      headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold", fontSize: props.approval ? 6.5 : 9.5, lineWidth: 0.15, lineColor: [0, 0, 0], halign: "center", valign: "middle", cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 } },
       bodyStyles: { fontSize: 7.5, textColor: [0, 0, 0], lineWidth: 0.15, lineColor: [0, 0, 0], cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 }, valign: "middle" },
-      columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { cellWidth: 14, halign: "center" }, 2: { cellWidth: 16, halign: "center" }, 3: { cellWidth: 58, halign: "left" }, 4: { cellWidth: 28, halign: "center" }, 5: { cellWidth: 18, halign: "center" }, 6: { cellWidth: 10, halign: "center" }, 7: { cellWidth: 16, halign: "center" }, 8: { cellWidth: 20, halign: "center", fontStyle: "bold" } },
+      styles: props.approval ? { fontSize: 6.5, cellPadding: { top: 1, bottom: 1, left: 1, right: 1 } } : undefined,
+      columnStyles: props.approval
+        ? { 3: { halign: "left", cellWidth: 34 }, 15: { halign: "center", fontStyle: "bold" } }
+        : { 0: { cellWidth: 10, halign: "center" }, 1: { cellWidth: 14, halign: "center" }, 2: { cellWidth: 16, halign: "center" }, 3: { cellWidth: 58, halign: "left" }, 4: { cellWidth: 28, halign: "center" }, 5: { cellWidth: 18, halign: "center" }, 6: { cellWidth: 10, halign: "center" }, 7: { cellWidth: 16, halign: "center" }, 8: { cellWidth: 20, halign: "center", fontStyle: "bold" } },
       rowPageBreak: "avoid", tableWidth: CW, theme: "grid",
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -837,9 +891,10 @@ async function downloadPDF(props: Props) {
   doc.save(quotationFileName(props, "pdf"));
 }
 
-function propsFromSavedQuotation(quotation: SavedQuotation): Props {
+function propsFromSavedQuotation(quotation: SavedQuotation, approval = false): Props {
   return {
     quotation,
+    approval,
     partyName: quotation.partyName,
     partyAddress: quotation.partyAddress,
     partyGST: quotation.partyGST,
@@ -859,6 +914,8 @@ function propsFromSavedQuotation(quotation: SavedQuotation): Props {
       rate: row.rate === null ? "" : String(row.rate),
       amt: row.amt,
       section: row.section,
+      mmInch: row.mmInch, dimL: row.dimL, dimB: row.dimB, dimH: row.dimH, dimBS: row.dimBS,
+      itemRate: row.itemRate, calcRate: row.calcRate,
     })),
     gross: quotation.gross,
     discounts: quotation.discounts,
@@ -877,6 +934,8 @@ function propsFromSavedQuotation(quotation: SavedQuotation): Props {
       rate: row.rate === null ? "" : String(row.rate),
       amt: row.amt,
       section: row.section,
+      mmInch: row.mmInch, dimL: row.dimL, dimB: row.dimB, dimH: row.dimH, dimBS: row.dimBS,
+      itemRate: row.itemRate, calcRate: row.calcRate,
     })),
     grossB: quotation.partBRows?.reduce((sum, row) => sum + (row.amt ?? 0), 0),
     afterDiscountB: (() => {
@@ -890,6 +949,17 @@ function propsFromSavedQuotation(quotation: SavedQuotation): Props {
 export async function printSavedQuotation(quotation: SavedQuotation, printWindow: Window) {
   if (printWindow.closed) throw new Error("The print window was closed.");
   const doc = await buildQuotationPDF(propsFromSavedQuotation(quotation));
+  doc.autoPrint();
+  const pdfUrl = URL.createObjectURL(doc.output("blob"));
+  printWindow.location.replace(pdfUrl);
+  window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 120_000);
+}
+
+// "Print for Approval" — same PDF but WITH the internal columns (L, B, H, B/S,
+// MM/INCH, Rate From Item Name, Calculated Rate) for internal approval.
+export async function printSavedQuotationForApproval(quotation: SavedQuotation, printWindow: Window) {
+  if (printWindow.closed) throw new Error("The print window was closed.");
+  const doc = await buildQuotationPDF(propsFromSavedQuotation(quotation, true));
   doc.autoPrint();
   const pdfUrl = URL.createObjectURL(doc.output("blob"));
   printWindow.location.replace(pdfUrl);

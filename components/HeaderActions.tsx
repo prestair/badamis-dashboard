@@ -222,6 +222,42 @@ export default function HeaderActions() {
     }
   }
 
+  // "Print for Approval" — loads full detail, then prints the internal sheet
+  // (with L/B/H/B/S, MM/INCH, Rate From Item Name, Calculated Rate).
+  async function handlePrintApprovalById(q: SavedQuotation) {
+    setLoadingId(q.dbId);
+    try {
+      const full = await loadQuotationDetail(q.dbId);
+      await handlePrintApproval(full);
+    } catch (error) {
+      console.error("Failed to load quotation detail for approval print", error);
+      alert(error instanceof Error ? error.message : "Failed to load quotation");
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  async function handlePrintApproval(quotation: SavedQuotation) {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow pop-ups to print the quotation.");
+      return;
+    }
+    printWindow.document.write("<!doctype html><title>Preparing approval sheet</title><body style='font-family:Arial,sans-serif;padding:24px'>Preparing approval sheet for printing…</body>");
+    printWindow.document.close();
+    setPrintingId(quotation.dbId);
+    try {
+      const { printSavedQuotationForApproval } = await import("@/components/QuotationDownload");
+      await printSavedQuotationForApproval(quotation, printWindow);
+    } catch (error) {
+      printWindow.close();
+      console.error("Approval print failed", error);
+      alert(`Approval print failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
   // ── Import / Export Template ────────────────────────────────────────────────
   async function handleExportTemplate() {
     const { exportTemplate } = await import("@/lib/quotationTemplate");
@@ -544,6 +580,15 @@ export default function HeaderActions() {
                   <td className="border border-slate-200 px-2 py-2 text-center"
                     onClick={(event) => event.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintApprovalById(q)}
+                        disabled={printingId !== null || loadingId === q.dbId}
+                        className="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50"
+                        title="Print internal sheet with all columns (for approval)"
+                      >
+                        {printingId === q.dbId || loadingId === q.dbId ? "Preparing…" : "🖨 Print for Approval"}
+                      </button>
                       <button onClick={() => openWith(setViewQuotation, q)}
                         disabled={loadingId === q.dbId}
                         className="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50">

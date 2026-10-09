@@ -7,6 +7,8 @@ import { useAuth } from "@/context/AuthContext";
 type ItemNameEntry = {
   id: string;
   item_name: string;
+  rate?: number | null;
+  standard_rate?: number | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -19,6 +21,10 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
   const [newItemName, setNewItemName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [editingRate, setEditingRate] = useState("");
+  const [editingStdRate, setEditingStdRate] = useState("");
+  const [newItemRate, setNewItemRate] = useState("");
+  const [newItemStdRate, setNewItemStdRate] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,6 +74,26 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
     setNotice({ message, error });
   }
 
+  // Export the full Item Name + Rate table to an Excel (.xlsx) file.
+  async function exportToExcel() {
+    try {
+      const XLSX = await import("xlsx");
+      const rows = entries.map((e) => ({
+        "Item Name": e.item_name,
+        "Rate Per Foot": e.rate === null || e.rate === undefined ? "" : e.rate,
+        "Standard Rate": e.standard_rate === null || e.standard_rate === undefined ? "" : e.standard_rate,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [{ wch: 48 }, { wch: 16 }, { wch: 16 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Item Rates");
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Prestair_Item_Rates_${today}.xlsx`);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Excel export failed.", true);
+    }
+  }
+
   async function addItemName() {
     const itemName = newItemName.trim();
     if (!itemName) {
@@ -77,18 +103,26 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
 
     setSaving(true);
     try {
+      // Rates are OPTIONAL. Typed value → send number; blank → send "" (null).
+      const toSend = (v: string) => {
+        const t = v.trim();
+        const n = Number(t);
+        return t === "" ? "" : (Number.isFinite(n) && n >= 0 ? n : "");
+      };
       const response = await fetch("/api/quotation-item-names", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-user-role": loggedRole ?? "",
         },
-        body: JSON.stringify({ itemName }),
+        body: JSON.stringify({ itemName, rate: toSend(newItemRate), standardRate: toSend(newItemStdRate) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to add Item Name.");
       setEntries((current) => [...current, data].sort((a, b) => a.item_name.localeCompare(b.item_name)));
       setNewItemName("");
+      setNewItemRate("");
+      setNewItemStdRate("");
       showNotice(`Added “${data.item_name}”.`);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Unable to add Item Name.", true);
@@ -100,6 +134,8 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
   function startEdit(entry: ItemNameEntry) {
     setEditingId(entry.id);
     setEditingValue(entry.item_name);
+    setEditingRate(entry.rate === null || entry.rate === undefined ? "" : String(entry.rate));
+    setEditingStdRate(entry.standard_rate === null || entry.standard_rate === undefined ? "" : String(entry.standard_rate));
     setNotice(null);
   }
 
@@ -113,13 +149,19 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
 
     setSaving(true);
     try {
+      // Blank rate is allowed → send empty string so the server stores null.
+      const toSend = (v: string) => {
+        const t = v.trim();
+        const n = Number(t);
+        return t === "" ? "" : (Number.isFinite(n) && n >= 0 ? n : "");
+      };
       const response = await fetch(`/api/quotation-item-names/${editingId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "x-user-role": loggedRole ?? "",
         },
-        body: JSON.stringify({ itemName }),
+        body: JSON.stringify({ itemName, rate: toSend(editingRate), standardRate: toSend(editingStdRate) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to update Item Name.");
@@ -182,6 +224,28 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                   placeholder="Enter the Item Name used in quotations"
                   className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
+                <input
+                  id="new-item-rate"
+                  type="number"
+                  min={0}
+                  value={newItemRate}
+                  onChange={(event) => setNewItemRate(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && void addItemName()}
+                  placeholder="Rate / Foot"
+                  title="Rate Per Foot — leave blank if not applicable"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:w-32"
+                />
+                <input
+                  id="new-item-std-rate"
+                  type="number"
+                  min={0}
+                  value={newItemStdRate}
+                  onChange={(event) => setNewItemStdRate(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && void addItemName()}
+                  placeholder="Standard Rate"
+                  title="Standard Rate — used when size is STD; leave blank if not applicable"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:w-32"
+                />
                 <button
                   type="button"
                   onClick={() => void addItemName()}
@@ -204,27 +268,40 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
               <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                 <p className="text-sm font-semibold text-slate-700">Item table ({entries.length})</p>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search Item Names"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => void exportToExcel()}
+                    disabled={entries.length === 0}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Export the Item Name + Rate table to Excel"
+                  >
+                    📥 Export to Excel
+                  </button>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search Item Names"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
               </div>
               <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200">
                 <table className="w-full border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="border-b border-slate-200 px-4 py-3">Item Name</th>
+                      <th className="w-32 border-b border-slate-200 px-4 py-3 text-right">Rate Per Foot</th>
+                      <th className="w-32 border-b border-slate-200 px-4 py-3 text-right">Standard Rate</th>
                       <th className="w-40 border-b border-slate-200 px-4 py-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {loading ? (
-                      <tr><td colSpan={2} className="px-4 py-8 text-center text-slate-400">Loading Item Names…</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">Loading Item Names…</td></tr>
                     ) : filteredEntries.length === 0 ? (
-                      <tr><td colSpan={2} className="px-4 py-8 text-center text-slate-400">No Item Names found.</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">No Item Names found.</td></tr>
                     ) : filteredEntries.map((entry) => (
                       <tr key={entry.id} className="hover:bg-blue-50/60">
                         <td className="px-4 py-3">
@@ -241,6 +318,38 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                               className="w-full rounded border border-blue-300 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200"
                             />
                           ) : entry.item_name}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {editingId === entry.id ? (
+                            <input
+                              type="number"
+                              min={0}
+                              value={editingRate}
+                              placeholder="blank"
+                              onChange={(event) => setEditingRate(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") void saveEdit();
+                                if (event.key === "Escape") setEditingId(null);
+                              }}
+                              className="w-28 rounded border border-blue-300 px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                          ) : (entry.rate === null || entry.rate === undefined ? <span className="text-slate-300">—</span> : `₹${Number(entry.rate).toLocaleString("en-IN")}`)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {editingId === entry.id ? (
+                            <input
+                              type="number"
+                              min={0}
+                              value={editingStdRate}
+                              placeholder="blank"
+                              onChange={(event) => setEditingStdRate(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") void saveEdit();
+                                if (event.key === "Escape") setEditingId(null);
+                              }}
+                              className="w-28 rounded border border-blue-300 px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                          ) : (entry.standard_rate === null || entry.standard_rate === undefined ? <span className="text-slate-300">—</span> : `₹${Number(entry.standard_rate).toLocaleString("en-IN")}`)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {editingId === entry.id ? (
