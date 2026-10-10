@@ -299,7 +299,16 @@ export default function HeaderActions() {
     setImportError("");
     try {
       const { importTemplate } = await import("@/lib/quotationTemplate");
-      const result = await importTemplate(importFile);
+      // Fetch Item Name rates so CALC. RATE can be computed from dimensions on import.
+      let itemRates: { item_name: string; rate?: number | null; standard_rate?: number | null }[] = [];
+      try {
+        const resRates = await fetch("/api/quotation-item-names", { cache: "no-store" });
+        if (resRates.ok) {
+          const data = await resRates.json();
+          if (Array.isArray(data)) itemRates = data;
+        }
+      } catch { /* rates optional — calc rate just stays blank if unavailable */ }
+      const result = await importTemplate(importFile, itemRates);
       const today = new Date().toISOString().split("T")[0];
       const finalUser = result.userName || "Unknown";
       const finalPartyName = result.partyName || "Unknown";

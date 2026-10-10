@@ -2,7 +2,67 @@
 import type { SavedRowState } from "@/context/QuotationContext";
 import type { QuotationDiscounts } from "@/lib/quotationAudit";
 
-const ITEM_HEADERS = ["SL NO", "ITEM CODE", "ITEM NAME", "ADDITIONAL DESCRIPTION", "SIZE", "HSN CODE", "QTY", "RATE"];
+// 13 columns. Dimensions (MM/INCH, L, B, H, B/S) drive SIZE + Calculated Rate
+// on import. Leave them blank + fill SIZE directly for a "STD"/manual size.
+const ITEM_HEADERS = ["SL NO", "ITEM CODE", "ITEM NAME", "ADDITIONAL DESCRIPTION", "MM/INCH", "L", "B", "H", "B/S", "SIZE", "HSN CODE", "QTY", "RATE"];
+const NCOLS = 13;        // total columns
+const LAST_COL = NCOLS - 1; // 12
+
+// ── Pure derived-value helpers (mirror QuotationModal) ──────────────────────
+function tplClean(v?: string): string {
+  const s = (v ?? "").trim();
+  return s === "null" || s === "undefined" ? "" : s;
+}
+
+// Compose the SIZE string from unit + L/B/H/B/S (same rules as the modal).
+// SIZE = "STD" only when BOTH unit and L are blank.
+export function tplComposeSize(unit: string, dimL?: string, dimB?: string, dimH?: string, dimBS?: string): string {
+  const u = unit === "INCH" ? "INCH" : (unit === "MM" ? "MM" : "");
+  const suffix = u === "INCH" ? "\"" : "";
+  const l = tplClean(dimL);
+  if (!u && l === "") return "STD";
+  const lbh = [dimL, dimB, dimH].map(tplClean).filter((v) => v !== "");
+  const bs = tplClean(dimBS);
+  const parts = lbh.map((v) => v + suffix);
+  let size = parts.join("X");
+  if (bs !== "" && bs !== "0") size += "+" + bs + suffix;
+  return size;
+}
+
+// Calculated Rate (same rules as the modal):
+//  - unit+L blank (STD) → standard rate.
+//  - L present → round(L in feet, 0.25 cutoff) * perFootRate.
+//  - missing rate → "".
+export function tplComputeCalcRate(
+  unit: string, dimL: string | undefined, perFootRate: string, stdRate: string
+): string {
+  const u = unit === "INCH" ? "INCH" : "MM";
+  const l = Number(tplClean(dimL));
+  const hasL = Number.isFinite(l) && l > 0;
+  const hasUnit = unit === "MM" || unit === "INCH";
+  if (!hasUnit && !hasL) {
+    const s = Number((stdRate ?? "").trim());
+    return Number.isFinite(s) && s > 0 ? String(s) : "";
+  }
+  if (!hasL) return "";
+  const pf = Number((perFootRate ?? "").trim());
+  if (!Number.isFinite(pf) || pf <= 0) return "";
+  const feet = u === "MM" ? l / 304.8 : l / 12;
+  const frac = feet - Math.floor(feet);
+  const roundedFeet = frac <= 0.25 ? Math.floor(feet) : Math.ceil(feet);
+  return String(roundedFeet * pf);
+}
+
+// Per-item rate lookup from the Item Names list (trimmed, case-insensitive).
+export type ItemRateLookup = { item_name: string; rate?: number | null; standard_rate?: number | null };
+function lookupRates(desc: string, opts: ItemRateLookup[]): { rate: string; std: string } {
+  const key = (desc ?? "").trim().toLowerCase();
+  if (!key) return { rate: "", std: "" };
+  const m = opts.find((o) => o.item_name.trim().toLowerCase() === key);
+  const rate = m?.rate !== undefined && m?.rate !== null && Number.isFinite(Number(m.rate)) ? String(m.rate) : "";
+  const std = m?.standard_rate !== undefined && m?.standard_rate !== null && Number.isFinite(Number(m.standard_rate)) ? String(m.standard_rate) : "";
+  return { rate, std };
+}
 
 // ── Export blank template ─────────────────────────────────────────────────────
 export async function exportTemplate() {
@@ -30,49 +90,74 @@ export async function exportTemplate() {
   const totAuto  = { font: { bold: true, sz: 10, color: { rgb: "888888" } }, fill: { fgColor: { rgb: "F0F0F0" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   const totGold  = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "FFD700" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
 
-  const blank8 = () => Array(8).fill(sc("", blankBorder));
+  const blankRowCells = () => Array(NCOLS).fill(sc("", blankBorder));
+  // Totals live in the right-hand columns. Label spans cols 9-11, value in col 12.
+  const TOT_LABEL_START = 9;
   const pushTot = (label: string, style: object, isAuto = false) => {
-    data.push(["", "", "", "", "", sc(label, style), sc("", style), isAuto ? sc("(auto)", totAuto) : sc("", totInput)]);
-    merges.push({ s: { r, c: 5 }, e: { r, c: 6 } }); r++;
+    const rowArr: CellVal[] = Array(NCOLS).fill("");
+    rowArr[TOT_LABEL_START] = sc(label, style);
+    rowArr[TOT_LABEL_START + 1] = sc("", style);
+    rowArr[TOT_LABEL_START + 2] = sc("", style);
+    rowArr[LAST_COL] = isAuto ? sc("(auto)", totAuto) : sc("", totInput);
+    data.push(rowArr);
+    merges.push({ s: { r, c: TOT_LABEL_START }, e: { r, c: TOT_LABEL_START + 2 } }); r++;
   };
   const addItemBlock = (secStyle: object, prefix: string, secCount: number) => {
     for (let s = 1; s <= secCount; s++) {
-      data.push([sc(`${prefix} ${s} (RENAME OR DELETE)`, secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle), sc("", secStyle)]);
-      merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
-      for (let i = 0; i < 8; i++) { data.push(blank8()); r++; }
+      data.push(Array(NCOLS).fill(null).map((_, i) => sc(i === 0 ? `${prefix} ${s} (RENAME OR DELETE)` : "", secStyle)));
+      merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
+      for (let i = 0; i < 8; i++) { data.push(blankRowCells()); r++; }
     }
   };
 
   // ── Title ──
-  data.push([sc("PRESTAIR QUOTATION IMPORT TEMPLATE", { font: { bold: true, sz: 14, color: { rgb: "1F4E79" } } }), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
-  data.push([sc("Fill YELLOW cells only. SL NO auto-fills on import — leave blank. Part B section blank rakho agar use nahi karna.", noteStyle), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
+  data.push([sc("PRESTAIR QUOTATION IMPORT TEMPLATE", { font: { bold: true, sz: 14, color: { rgb: "1F4E79" } } })]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
+  data.push([sc("Fill YELLOW cells only. SL NO auto-fills on import — leave blank. For a dimensioned item fill MM/INCH + L (B/H/B-S optional) — SIZE & CALC. RATE compute on import. For a standard item leave MM/INCH & L blank — SIZE becomes STD. Part B section blank rakho agar use nahi karna.", noteStyle)]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
   data.push([]); r++;
 
-  // ── Header fields ──
-  data.push([sc("USER NAME:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("DATE:", labelStyle), sc("(auto: today on import)", noteStyle), "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
-  data.push([sc("CLIENT NAME (M/S):", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("REQUESTER:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle)]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
-  data.push([sc("ADDRESS:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("GST NO.:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle)]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
-  data.push([sc("KIND ATTENTION:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), "", "", "", ""]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 3 } }); r++;
-  data.push([sc("SUBJECT:", labelStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle), sc("", inputStyle)]);
-  merges.push({ s: { r, c: 1 }, e: { r, c: 7 } }); r++;
+  // ── Header fields (labels in col 0, values cols 1-3; right labels col 9, values 10-12) ──
+  const RLABEL = 9, RVAL = 10;
+  const metaRow = (leftLabel: string, rightLabel: string, rightNote = false) => {
+    const rowArr: CellVal[] = Array(NCOLS).fill("");
+    rowArr[0] = sc(leftLabel, labelStyle);
+    rowArr[1] = sc("", inputStyle); rowArr[2] = sc("", inputStyle); rowArr[3] = sc("", inputStyle);
+    if (rightLabel) {
+      rowArr[RLABEL] = sc(rightLabel, labelStyle);
+      rowArr[RVAL] = rightNote ? sc("(auto: today on import)", noteStyle) : sc("", inputStyle);
+      rowArr[RVAL + 1] = rightNote ? "" : sc("", inputStyle);
+      rowArr[RVAL + 2] = rightNote ? "" : sc("", inputStyle);
+    }
+    data.push(rowArr);
+    merges.push({ s: { r, c: 1 }, e: { r, c: 3 } });
+    if (rightLabel) merges.push({ s: { r, c: RVAL }, e: { r, c: LAST_COL } });
+    r++;
+  };
+  metaRow("USER NAME:", "DATE:", true);
+  metaRow("CLIENT NAME (M/S):", "REQUESTER:");
+  metaRow("ADDRESS:", "GST NO.:");
+  metaRow("KIND ATTENTION:", "");
+  // Subject spans full width value
+  {
+    const rowArr: CellVal[] = Array(NCOLS).fill("");
+    rowArr[0] = sc("SUBJECT:", labelStyle);
+    rowArr[1] = sc("", inputStyle);
+    data.push(rowArr);
+    merges.push({ s: { r, c: 1 }, e: { r, c: LAST_COL } }); r++;
+  }
   data.push([]); r++;
 
   // ── PART A ──
-  data.push([sc("PART - A", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA), sc("", partHeadA)]);
-  merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
+  data.push(Array(NCOLS).fill(null).map((_, i) => sc(i === 0 ? "PART - A" : "", partHeadA)));
+  merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
   data.push([sc("SL NO\n(auto — leave blank)", thGrey), ...ITEM_HEADERS.slice(1).map((h) => sc(h, th))]); r++;
   addItemBlock(secStyleA, "SECTION", 2);
   data.push([]); r++;
 
   // ── PART B ──
-  data.push(Array(8).fill(null).map((_, i) => sc(i === 0 ? "PART - B  (Leave entire section blank if not used)" : "", partHeadB)));
-  merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
+  data.push(Array(NCOLS).fill(null).map((_, i) => sc(i === 0 ? "PART - B  (Leave entire section blank if not used)" : "", partHeadB)));
+  merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
   data.push([sc("SL NO\n(auto — leave blank)", thGrey), ...ITEM_HEADERS.slice(1).map((h) => sc(h, th))]); r++;
   addItemBlock(secStyleB, "PART B - SECTION", 2);
   data.push([]); r++;
@@ -92,15 +177,36 @@ export async function exportTemplate() {
   pushTot("PACKING CHARGES", totInput);
   pushTot("TAXABLE VALUE", totLabel, true);
   pushTot("GST 18%", totLabel, true);
-  data.push(["", "", "", "", "", sc("GRAND TOTAL", totGold), sc("", totGold), sc("(auto)", totAuto)]);
-  merges.push({ s: { r, c: 5 }, e: { r, c: 6 } }); r++;
+  {
+    const rowArr: CellVal[] = Array(NCOLS).fill("");
+    rowArr[TOT_LABEL_START] = sc("GRAND TOTAL", totGold);
+    rowArr[TOT_LABEL_START + 1] = sc("", totGold);
+    rowArr[TOT_LABEL_START + 2] = sc("", totGold);
+    rowArr[LAST_COL] = sc("(auto)", totAuto);
+    data.push(rowArr);
+    merges.push({ s: { r, c: TOT_LABEL_START }, e: { r, c: TOT_LABEL_START + 2 } }); r++;
+  }
   data.push([]); r++;
-  data.push([sc("NOTE: Yellow = fill karo. (auto) = import par calculate hoga. SL NO blank rakho. Part B blank rakho agar use nahi karna.", noteStyle), "", "", "", "", "", "", ""]);
-  merges.push({ s: { r, c: 0 }, e: { r, c: 7 } }); r++;
+  data.push([sc("NOTE: Yellow = fill karo. (auto) = import par calculate hoga. SL NO blank rakho. MM/INCH + L bharo to SIZE & CALC. RATE auto bante hain; blank chhodo to SIZE = STD. Part B blank rakho agar use nahi karna.", noteStyle)]);
+  merges.push({ s: { r, c: 0 }, e: { r, c: LAST_COL } }); r++;
 
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws["!merges"] = merges;
-  ws["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 28 }, { wch: 50 }, { wch: 14 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
+  ws["!cols"] = [
+    { wch: 10 },  // SL NO
+    { wch: 12 },  // ITEM CODE
+    { wch: 26 },  // ITEM NAME
+    { wch: 40 },  // ADDITIONAL DESCRIPTION
+    { wch: 9 },   // MM/INCH
+    { wch: 7 },   // L
+    { wch: 7 },   // B
+    { wch: 7 },   // H
+    { wch: 7 },   // B/S
+    { wch: 16 },  // SIZE
+    { wch: 12 },  // HSN CODE
+    { wch: 7 },   // QTY
+    { wch: 14 },  // RATE
+  ];
   XLSX.utils.book_append_sheet(wb, ws, "Quotation Template");
   XLSX.writeFile(wb, "Prestair_Quotation_Template.xlsx");
 }
@@ -109,7 +215,8 @@ export async function exportTemplate() {
 function parseRows(
   rawData: (string | number | undefined)[][],
   startIdx: number,
-  endIdx: number
+  endIdx: number,
+  itemRates: ItemRateLookup[]
 ): SavedRowState[] {
   const rows: SavedRowState[] = [];
   let currentSection = "";
@@ -133,16 +240,44 @@ function parseRows(
       continue;
     }
 
+    // 13-column layout:
+    // 0 SL NO | 1 CODE | 2 NAME | 3 ADD-DESC | 4 MM/INCH | 5 L | 6 B | 7 H | 8 B/S | 9 SIZE | 10 HSN | 11 QTY | 12 RATE
     const itemCode = cv[1] || "";
     const itemName = cv[2] || "";
     const addDesc  = cv[3] || "";
-    const size     = cv[4] || "";
-    const hsn      = cv[5] || "";
-    const qty      = Number(cv[6]) || 1;
-    const rate     = cv[7] ? Number(cv[7]) : null;
+    const rawUnit  = (cv[4] || "").toUpperCase();
+    const unit     = rawUnit === "INCH" ? "INCH" : (rawUnit === "MM" ? "MM" : "");
+    const dimL     = cv[5] || "";
+    const dimB     = cv[6] || "";
+    const dimH     = cv[7] || "";
+    const dimBS    = cv[8] || "";
+    const sizeCell = cv[9] || "";
+    const hsn      = cv[10] || "";
+    const qty      = Number(cv[11]) || 1;
+    // RATE: ignore non-numeric / blank → null (so the amount is simply NQ and
+    // totals are unaffected, instead of producing NaN).
+    const rateNum  = Number(cv[12]);
+    const rate     = cv[12] !== "" && Number.isFinite(rateNum) && rateNum >= 0 ? rateNum : null;
     if (!itemCode && !itemName && !addDesc) continue;
     slNo++;
-    rows.push({ id: itemCode || `item-${slNo}`, rowType: "item", desc: itemName, size, hsn, section: currentSection || "Custom", qty, additionalColumn: addDesc, discount: 0, discountIsPerUnit: false, rate, amt: rate !== null ? qty * rate : null, checked: true });
+
+    // Dimensions present? → compute SIZE from them; else use the SIZE cell as typed.
+    const hasDimInputs = !!(unit || dimL.trim() || dimB.trim() || dimH.trim() || dimBS.trim());
+    const size = hasDimInputs ? tplComposeSize(unit, dimL, dimB, dimH, dimBS) : (sizeCell || "STD");
+
+    // Snapshot per-item rates from the Item Names table, then compute CALC. RATE.
+    const { rate: perFoot, std } = lookupRates(itemName, itemRates);
+    const calcRate = tplComputeCalcRate(unit, dimL, perFoot, std);
+
+    rows.push({
+      id: itemCode || `item-${slNo}`, rowType: "item", desc: itemName, size, hsn,
+      section: currentSection || "Custom", qty, additionalColumn: addDesc,
+      discount: 0, discountIsPerUnit: false, rate, amt: rate !== null ? qty * rate : null, checked: true,
+      // New snapshot fields so the imported quotation behaves like a modal-made one.
+      mmInch: unit === "INCH" ? "INCH" : (unit === "MM" ? "MM" : undefined),
+      dimL: dimL || undefined, dimB: dimB || undefined, dimH: dimH || undefined, dimBS: dimBS || undefined,
+      itemRate: perFoot || undefined, stdRate: std || undefined, calcRate: calcRate || undefined,
+    });
   }
 
   // Remove empty sections
@@ -177,7 +312,7 @@ export type ImportResult = {
   requester: string;
 };
 
-export async function importTemplate(file: File): Promise<ImportResult> {
+export async function importTemplate(file: File, itemRates: ItemRateLookup[] = []): Promise<ImportResult> {
   const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: "array" });
@@ -193,8 +328,9 @@ export async function importTemplate(file: File): Promise<ImportResult> {
     if (!row) continue;
     const left = String(row[0] || "").toUpperCase().trim();
     const leftVal = String(row[1] || "").trim();
-    const right = String(row[4] || "").toUpperCase().trim();
-    const rightVal = String(row[5] || "").trim();
+    // Right-hand labels sit in col 9, their value starts col 10 (13-col layout).
+    const right = String(row[9] || "").toUpperCase().trim();
+    const rightVal = String(row[10] || "").trim();
     if (left.includes("USER NAME"))                            userName     = leftVal;
     if (left.includes("CLIENT NAME") || left.includes("M/S")) partyName    = leftVal;
     if (left.includes("ADDRESS"))                              partyAddress = leftVal;
@@ -210,8 +346,9 @@ export async function importTemplate(file: File): Promise<ImportResult> {
   for (let i = 0; i < rawData.length; i++) {
     const row = rawData[i];
     if (!row) continue;
-    const label = String(row[5] || row[0] || "").toUpperCase().trim();
-    const val = Number(row[7] ?? row[6] ?? 0) || 0;
+    // Totals labels sit in col 9, value in col 12 (13-col layout).
+    const label = String(row[9] || row[0] || "").toUpperCase().trim();
+    const val = Number(row[12] ?? row[11] ?? 0) || 0;
     if (label.includes("DISCOUNT % (PART A)") || label.includes("DISCOUNT % PART A"))    discountPercentA  = val;
     else if (label.includes("DISCOUNT % (PART B)") || label.includes("DISCOUNT % PART B")) discountPercentB = val;
     else if (label.includes("SEASONAL DISCOUNT"))  seasonalDiscount  = val;
@@ -246,18 +383,18 @@ export async function importTemplate(file: File): Promise<ImportResult> {
   for (let i = partAHeaderIdx + 1; i < rawData.length; i++) {
     const row = rawData[i];
     if (!row) continue;
-    const c5 = String(row[5] || "").toUpperCase().trim();
-    if (c5.includes("TOTAL AMOUNT (A)") || c5.includes("TOTAL AMOUNT A")) { totalsStartIdx = i; break; }
+    const cLabel = String(row[9] || "").toUpperCase().trim();
+    if (cLabel.includes("TOTAL AMOUNT (A)") || cLabel.includes("TOTAL AMOUNT A")) { totalsStartIdx = i; break; }
   }
 
   // ── Parse Part A rows ─────────────────────────────────────────────────────
   const partAEnd = partBHeaderIdx > -1 ? partBBannerIdx : totalsStartIdx;
-  const rows = parseRows(rawData, partAHeaderIdx + 1, partAEnd);
+  const rows = parseRows(rawData, partAHeaderIdx + 1, partAEnd, itemRates);
 
   // ── Parse Part B rows ─────────────────────────────────────────────────────
   let partBRows: SavedRowState[] = [];
   if (partBHeaderIdx > -1) {
-    partBRows = parseRows(rawData, partBHeaderIdx + 1, totalsStartIdx);
+    partBRows = parseRows(rawData, partBHeaderIdx + 1, totalsStartIdx, itemRates);
   }
 
   if (rows.filter((r) => r.rowType === "item").length === 0) {
@@ -294,7 +431,12 @@ export async function importTemplate(file: File): Promise<ImportResult> {
   };
 
   return {
-    rows, partBRows, gross, discounts,
+    rows,
+    // If Part B has NO items, return an empty array so it is never imported /
+    // shown anywhere (view, Excel, print). Leftover empty section headers are
+    // dropped too.
+    partBRows: partBEnabled ? partBRows : [],
+    gross, discounts,
     afterDiscount: combined, gst, grandTotal,
     userName, partyName, partyAddress, partyGST, attention, subject, requester,
   };
