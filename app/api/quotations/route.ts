@@ -105,13 +105,34 @@ async function allocateQuotationNo(sb: any, requestedNo: string, date: string): 
 }
 
 // ── GET all ───────────────────────────────────────────────────────────────────
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    if (url.searchParams.get('check') === '1') {
+      // Lightweight signature check — no rows, just count and latest timestamp
+      const sb = getSupabaseClient();
+      if (!sb) return NextResponse.json({ latestUpdatedAt: '', count: 0 }, { headers: { 'Cache-Control': 'no-store' } });
+      const { data, error } = await sb
+        .from('quotations')
+        .select('saved_at')
+        .order('saved_at', { ascending: false })
+        .limit(1);
+      if (error) return NextResponse.json({ latestUpdatedAt: '', count: 0 }, { headers: { 'Cache-Control': 'no-store' } });
+      const { count: totalCount } = await sb
+        .from('quotations')
+        .select('id', { count: 'exact', head: true });
+      const latestUpdatedAt = data?.[0]?.saved_at ?? '';
+      return NextResponse.json(
+        { latestUpdatedAt, count: totalCount ?? 0 },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
     // 1. Local Express backend
     if (BACKEND) {
       try {
         const res = await fetch(`${BACKEND}/api/quotations`, { cache: "no-store" });
-        if (res.ok) return NextResponse.json(await res.json());
+        if (res.ok) return NextResponse.json(await res.json(), { headers: { 'Cache-Control': 'no-store' } });
       } catch {
         // Backend unreachable — fall through to Supabase/file
       }
@@ -134,13 +155,13 @@ export async function GET() {
           .order("serial_no", { ascending: true }));
       }
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json(data ?? []);
+      return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // 3. Local file fallback
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readAll } = require("@/lib/fileStore");
-    return NextResponse.json(readAll());
+    return NextResponse.json(readAll(), { headers: { 'Cache-Control': 'no-store' } });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Server error" },

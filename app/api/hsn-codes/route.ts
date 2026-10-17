@@ -25,7 +25,7 @@ export async function GET() {
       .select("id, code, description, created_at")
       .order("code", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data ?? []);
+    return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60' } });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       .single();
     if (error?.code === "23505") return NextResponse.json({ error: "This HSN code already exists." }, { status: 409 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(data, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }

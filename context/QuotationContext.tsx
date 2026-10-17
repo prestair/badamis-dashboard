@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
 import {
   QuotationDiscounts,
   QuotationEditEntry,
@@ -246,6 +246,7 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const lastKnownSignature = useRef<{ latestUpdatedAt: string; count: number } | null>(null);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const hasActiveFilters = Boolean(normalizedSearchQuery || dateFrom || dateTo);
@@ -276,7 +277,17 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     try {
       const res  = await fetch("/api/quotations");
       const data = await res.json();
-      if (Array.isArray(data)) setQuotations(data.map(mapRow).sort((a, b) => b.serialNo - a.serialNo));
+      if (Array.isArray(data)) {
+        setQuotations(data.map(mapRow).sort((a, b) => b.serialNo - a.serialNo));
+        // update the smart-poll signature so the next poll does not trigger a redundant fetch
+        if (Array.isArray(data) && data.length > 0) {
+          const latestUpdatedAt = data.reduce((max: string, row: Record<string, unknown>) => {
+            const t = String(row.saved_at ?? '');
+            return t > max ? t : max;
+          }, '');
+          lastKnownSignature.current = { latestUpdatedAt, count: data.length };
+        }
+      }
     } catch (e) {
       console.error("Failed to fetch quotations", e);
     } finally {
@@ -286,9 +297,24 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Auto-refresh every 20 minutes — reduced to save Supabase egress
+  // Smart poll: check every 3 min if anything changed; only do full fetch if it did.
   useEffect(() => {
-    const interval = setInterval(() => { refresh(); }, 20 * 60 * 1000);
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/quotations?check=1');
+        if (!res.ok) return;
+        const sig = await res.json() as { latestUpdatedAt: string; count: number };
+        const prev = lastKnownSignature.current;
+        if (!prev || prev.latestUpdatedAt !== sig.latestUpdatedAt || prev.count !== sig.count) {
+          lastKnownSignature.current = sig;
+          await refresh();
+        }
+      } catch {
+        // network hiccup — skip this poll, try again in 3 min
+      }
+    };
+
+    const interval = setInterval(poll, 3 * 60 * 1000);
     return () => clearInterval(interval);
   }, [refresh]);
 
