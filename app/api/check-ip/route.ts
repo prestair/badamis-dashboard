@@ -46,8 +46,12 @@ export async function GET(req: Request) {
     const allowed = authorised.includes(ip);
 
     if (!allowed) {
-      // Fire-and-forget alert email to the admin.
-      sendAlertEmail(ip, username).catch(() => {/* silent */});
+      // Await email so errors surface in Vercel logs
+      try {
+        await sendAlertEmail(ip, username);
+      } catch (emailErr) {
+        console.error("[check-ip] email failed:", emailErr);
+      }
     }
 
     return NextResponse.json({ allowed, ip });
@@ -63,34 +67,35 @@ async function sendAlertEmail(ip: string, username: string) {
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const adminTo   = process.env.GMAIL_ADMIN_TO;
 
-  if (!gmailPass || !gmailUser || !adminTo) return; // not configured — skip silently
-
-  try {
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.default.createTransport({
-      service: "gmail",
-      auth: { user: gmailUser, pass: gmailPass },
-    });
-
-    const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-
-    await transporter.sendMail({
-      from: `"Prestair Security" <${gmailUser}>`,
-      to: adminTo,
-      subject: `Unauthorised login attempt from ${ip} by ${username}`,
-      html: `
-        <h2 style="color:#dc2626;">⚠️ Unauthorised Login Attempt</h2>
-        <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
-          <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">IP Address</td><td style="padding:6px 12px;">${ip}</td></tr>
-          <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Username</td><td style="padding:6px 12px;">${username}</td></tr>
-          <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Time (IST)</td><td style="padding:6px 12px;">${now}</td></tr>
-        </table>
-        <p style="margin-top:16px;color:#6b7280;font-size:12px;">
-          This IP is not in the Authorised IPs list. Please review and add it if this is a legitimate user.
-        </p>
-      `,
-    });
-  } catch (err) {
-    console.error("[check-ip] email send failed:", err);
+  if (!gmailPass || !gmailUser || !adminTo) {
+    console.warn("[check-ip] email not configured — skipping");
+    return;
   }
+
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user: gmailUser, pass: gmailPass },
+  });
+
+  const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+  await transporter.sendMail({
+    from: `"Prestair Security" <${gmailUser}>`,
+    to: adminTo,
+    subject: `Unauthorised login attempt from ${ip} by ${username}`,
+    html: `
+      <h2 style="color:#dc2626;">⚠️ Unauthorised Login Attempt</h2>
+      <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
+        <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">IP Address</td><td style="padding:6px 12px;">${ip}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Username</td><td style="padding:6px 12px;">${username}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Time (IST)</td><td style="padding:6px 12px;">${now}</td></tr>
+      </table>
+      <p style="margin-top:16px;color:#6b7280;font-size:12px;">
+        This IP is not in the Authorised IPs list. Please review and add it if this is a legitimate user.
+      </p>
+    `,
+  });
 }
