@@ -25,7 +25,7 @@ export async function GET() {
       .select("id, name, created_at")
       .order("name", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60' } });
+    return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'public, s-maxage=60' } });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }

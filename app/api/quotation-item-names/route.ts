@@ -29,10 +29,10 @@ export async function GET() {
         .select("id, item_name, rate, standard_rate, rate_rule, created_at, updated_at")
         .order("item_name", { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60' } });
+      return NextResponse.json(data ?? [], { headers: { 'Cache-Control': 'public, s-maxage=60' } });
     }
 
-    return NextResponse.json(readItemNames(), { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60' } });
+    return NextResponse.json(readItemNames(), { headers: { 'Cache-Control': 'public, s-maxage=60' } });
   } catch (error: unknown) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to load Item Names." },

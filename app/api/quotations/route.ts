@@ -109,18 +109,15 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     if (url.searchParams.get('check') === '1') {
-      // Lightweight signature check — no rows, just count and latest timestamp
+      // Lightweight signature — single query: count + max(saved_at) atomically
       const sb = getSupabaseClient();
       if (!sb) return NextResponse.json({ latestUpdatedAt: '', count: 0 }, { headers: { 'Cache-Control': 'no-store' } });
-      const { data, error } = await sb
+      const { data, count: totalCount, error } = await sb
         .from('quotations')
-        .select('saved_at')
+        .select('saved_at', { count: 'exact' })
         .order('saved_at', { ascending: false })
         .limit(1);
       if (error) return NextResponse.json({ latestUpdatedAt: '', count: 0 }, { headers: { 'Cache-Control': 'no-store' } });
-      const { count: totalCount } = await sb
-        .from('quotations')
-        .select('id', { count: 'exact', head: true });
       const latestUpdatedAt = data?.[0]?.saved_at ?? '';
       return NextResponse.json(
         { latestUpdatedAt, count: totalCount ?? 0 },

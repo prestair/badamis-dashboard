@@ -306,8 +306,9 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
         const sig = await res.json() as { latestUpdatedAt: string; count: number };
         const prev = lastKnownSignature.current;
         if (!prev || prev.latestUpdatedAt !== sig.latestUpdatedAt || prev.count !== sig.count) {
-          lastKnownSignature.current = sig;
+          // Only update signature AFTER successful refresh (fix issue #4)
           await refresh();
+          // refresh() already writes lastKnownSignature — no double-write needed
         }
       } catch {
         // network hiccup — skip this poll, try again in 3 min
@@ -347,6 +348,8 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error(data.error ?? "Save failed");
     const saved = mapRow(data);
     setQuotations((prev) => [saved, ...prev]);
+    // Reset signature so next poll reflects the new count correctly
+    lastKnownSignature.current = null;
     return saved;
   }
 
@@ -395,6 +398,8 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
     setQuotations((prev) =>
       prev.map((old) => (old.dbId === dbId ? updated : old))
     );
+    // Reset signature so next poll picks up the updated timestamp
+    lastKnownSignature.current = null;
   }
 
   // ── delete ─────────────────────────────────────────────────────────────────
@@ -410,6 +415,8 @@ export function QuotationProvider({ children }: { children: ReactNode }) {
       throw new Error(data.error ?? "Delete failed");
     }
     setQuotations((prev) => prev.filter((q) => q.dbId !== dbId));
+    // Reset signature so next poll reflects the reduced count
+    lastKnownSignature.current = null;
   }
 
   // ── toggle status ─────────────────────────────────────────────────────────
