@@ -89,6 +89,7 @@ async function sendAlertEmail(ip: string, username: string) {
     html: `
       <h2 style="color:#dc2626;">⚠️ Unauthorised Login Attempt</h2>
       <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
+        <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">App Name</td><td style="padding:6px 12px;">Prestair Quotation</td></tr>
         <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">IP Address</td><td style="padding:6px 12px;">${ip}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Username</td><td style="padding:6px 12px;">${username}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:bold;color:#374151;">Time (IST)</td><td style="padding:6px 12px;">${now}</td></tr>
