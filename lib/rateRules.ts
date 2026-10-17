@@ -94,10 +94,14 @@ export function computeCalcRateByRule(
   const b = Number(clean(dimB));
   const hasB = Number.isFinite(b) && b > 0;
 
-  // Round money to a tidy integer (avoids 22499.99 style float noise). Exact
-  // feet are used everywhere EXCEPT the "table" rule, which rounds the feet to a
-  // whole number with a 0.25 cutoff before multiplying.
+  // Round money to a tidy integer (avoids 22499.99 style float noise).
   const money = (n: number) => String(Math.round(n));
+
+  // ── STD bypass: if no unit AND no L → always use Standard Rate regardless of rule ──
+  if (!hasUnit && !hasL) {
+    const s = Number((stdRate ?? "").trim());
+    return Number.isFinite(s) && s > 0 ? String(s) : "";
+  }
 
   switch (rule.type) {
     case "volume": {
@@ -130,11 +134,7 @@ export function computeCalcRateByRule(
     }
     case "standard":
     default: {
-      // STD (no unit + no L) → standard rate; otherwise EXACT feet * ratePerFoot.
-      if (!hasUnit && !hasL) {
-        const s = Number((stdRate ?? "").trim());
-        return Number.isFinite(s) && s > 0 ? String(s) : "";
-      }
+      // STD already handled above. Here unit+L exist → exact feet * ratePerFoot.
       if (!hasL) return "";
       const pf = Number((ratePerFoot ?? "").trim());
       if (!Number.isFinite(pf) || pf <= 0) return "";

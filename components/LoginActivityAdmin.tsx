@@ -4,381 +4,377 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
 
-// ── Reverse geocode: coords → city name (used for old rows where city is NULL) ─
+// ── Reverse geocode ───────────────────────────────────────────────────────────
 function CityFetcher({ lat, lng, accuracy }: { lat: number; lng: number; accuracy: number | null }) {
   const [city, setCity] = useState<string | null>(null);
-
   useEffect(() => {
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
-      headers: { "Accept-Language": "en" },
-    })
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, { headers: { "Accept-Language": "en" } })
       .then((r) => r.json())
-      .then((data) => {
-        const a = data.address ?? {};
+      .then((d) => {
+        const a = d.address ?? {};
         const c = a.city || a.town || a.village || a.county || a.state_district || a.state || "";
         const s = a.state || "";
         setCity(c && s && c !== s ? `${c}, ${s}` : c || s || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       })
       .catch(() => setCity(`${lat.toFixed(4)}, ${lng.toFixed(4)}`));
   }, [lat, lng]);
-
-  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-  const accuracyText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
-
+  const acc = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-semibold text-slate-700">
-        {city ? `📍 ${city}${accuracyText}` : <span className="text-slate-400 animate-pulse">Fetching city…</span>}
-      </div>
-      <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline">
-        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-        </svg>
-        View on Map
-      </a>
-    </div>
+    <span className="text-[11px] text-slate-700">
+      {city ? `📍 ${city}${acc}` : <span className="animate-pulse text-slate-400">…</span>}
+      {" "}<a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">map</a>
+    </span>
   );
 }
 
 type LoginActivityRecord = {
-  id:           string;
-  username:     string;
-  logged_in_at: string;
-  ip_address:   string | null;
-  device_info:  string | null;
-  latitude:     number | null;
-  longitude:    number | null;
-  gps_accuracy: number | null;
-  gps_error:    string | null;
-  city:         string | null;
+  id: string; username: string; logged_in_at: string;
+  ip_address: string | null; device_info: string | null;
+  latitude: number | null; longitude: number | null;
+  gps_accuracy: number | null; gps_error: string | null; city: string | null;
 };
+type IpEntry = { ip_address: string; label: string | null };
+type IpGroup = { ip: string; lastSeen: string; count: number; records: LoginActivityRecord[] };
+type DateGroup = { date: string; displayDate: string; ipGroups: IpGroup[] };
 
-type Notice = { text: string; error: boolean };
+const focusableSelector = ["button:not([disabled])", "input:not([disabled])", "[tabindex]:not([tabindex='-1'])"].join(",");
 
-const focusableSelector = [
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
+function fmtDT(iso: string) {
+  try { return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }); }
+  catch { return iso; }
+}
+function fmtTime(iso: string) {
+  try { return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); }
+  catch { return iso; }
+}
+function fmtDevice(d: string | null) {
+  if (!d) return "—";
+  const ua = d.toLowerCase();
+  let br = "Browser", os = "Device";
+  if (ua.includes("edg/")) br = "Edge"; else if (ua.includes("chrome")) br = "Chrome"; else if (ua.includes("firefox")) br = "Firefox"; else if (ua.includes("safari")) br = "Safari";
+  if (ua.includes("windows")) os = "Windows"; else if (ua.includes("android")) os = "Android"; else if (ua.includes("iphone") || ua.includes("ipad")) os = "iOS"; else if (ua.includes("mac")) os = "macOS";
+  return `${br}/${os}`;
+}
+
+function LocationInline({ r }: { r: LoginActivityRecord }) {
+  if (r.gps_error) return <span className="text-[11px] text-amber-500">{r.gps_error}</span>;
+  if (r.city) {
+    const acc = r.gps_accuracy ? ` (±${Math.round(r.gps_accuracy)}m)` : "";
+    return (
+      <span className="text-[11px] text-slate-700">
+        📍 {r.city}{acc}
+        {r.latitude && r.longitude && <> · <a href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">map</a></>}
+      </span>
+    );
+  }
+  if (r.latitude !== null && r.longitude !== null)
+    return <CityFetcher lat={r.latitude} lng={r.longitude} accuracy={r.gps_accuracy} />;
+  return <span className="text-[11px] text-slate-400">—</span>;
+}
 
 export default function LoginActivityAdmin({ onClose }: { onClose: () => void }) {
   const { loggedRole } = useAuth();
   const [records, setRecords] = useState<LoginActivityRecord[]>([]);
+  const [ipLabels, setIpLabels] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; err: boolean } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // ── Focus management & cleanup ────────────────────────────────────────────
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
-    };
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // ── Keyboard navigation ───────────────────────────────────────────────────
-  function handleDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab" || !dialogRef.current) return;
-
-    const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector));
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+    if (e.key !== "Tab" || !dialogRef.current) return;
+    const f = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector));
+    if (!f.length) return;
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   }
 
-  // ── Load data ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    // Wait until role is resolved — load as soon as admin is confirmed
-    if (loggedRole === "admin") {
-      loadRecords();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loggedRole]);
+  function notify(text: string, err = false) {
+    setNotice({ text, err });
+    window.setTimeout(() => setNotice(null), 4000);
+  }
 
-  // Also load immediately on mount if role is already known
-  useEffect(() => {
-    if (loggedRole === "admin") loadRecords();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadRecords() {
+  async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/login-activity", {
-        headers: { "x-user-role": "admin" },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const [actRes, ipRes] = await Promise.all([
+        fetch("/api/login-activity", { headers: { "x-user-role": "admin" } }),
+        fetch("/api/authorised-ips", { headers: { "x-user-role": "admin" } }),
+      ]);
+      if (actRes.ok) {
+        const data = await actRes.json();
         setRecords(Array.isArray(data) ? data : []);
-      } else {
-        showNotice("Failed to load login activity data.", true);
+      } else notify("Failed to load.", true);
+      if (ipRes.ok) {
+        const ips: IpEntry[] = await ipRes.json();
+        const m = new Map<string, string>();
+        for (const e of ips) if (e.label) m.set(e.ip_address, e.label);
+        setIpLabels(m);
       }
-    } catch {
-      showNotice("Network error loading login activity.", true);
-    } finally {
-      setLoading(false);
+    } catch { notify("Network error.", true); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { if (loggedRole === "admin") void load(); }, [loggedRole]); // eslint-disable-line
+
+  // ── Grouping: date → IP ───────────────────────────────────────────────────
+  const dateGroups: DateGroup[] = (() => {
+    const byDate = new Map<string, LoginActivityRecord[]>();
+    for (const r of records) {
+      const dk = new Date(r.logged_in_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      if (!byDate.has(dk)) byDate.set(dk, []);
+      byDate.get(dk)!.push(r);
     }
-  }
+    return Array.from(byDate.entries()).map(([date, recs]) => {
+      const byIp = new Map<string, LoginActivityRecord[]>();
+      for (const r of recs) { const ip = r.ip_address ?? "unknown"; if (!byIp.has(ip)) byIp.set(ip, []); byIp.get(ip)!.push(r); }
+      const ipGroups: IpGroup[] = Array.from(byIp.entries())
+        .map(([ip, rs]) => ({ ip, lastSeen: rs.reduce((a, b) => a > b.logged_in_at ? a : b.logged_in_at, ""), count: rs.length, records: [...rs].sort((a, b) => b.logged_in_at.localeCompare(a.logged_in_at)) }))
+        .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+      const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      return { date, displayDate, ipGroups };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  })();
 
-  // ── Utils ──────────────────────────────────────────────────────────────────
-  function showNotice(text: string, error = false) {
-    setNotice({ text, error });
-    window.setTimeout(() => {
-      setNotice((current) => current?.text === text ? null : current);
-    }, 4000);
-  }
-
-  function formatDateTime(isoString: string): string {
+  async function deleteRecord(id: string) {
     try {
-      const date = new Date(isoString);
-      return date.toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-    } catch {
-      return isoString;
-    }
+      const res = await fetch(`/api/login-activity?id=${id}`, { method: "DELETE", headers: { "x-user-role": "admin" } });
+      if (res.ok) { setRecords((p) => p.filter((r) => r.id !== id)); notify("Deleted."); }
+      else { const d = await res.json(); notify(d.error ?? "Delete failed.", true); }
+    } catch { notify("Network error.", true); }
   }
 
-  function formatDevice(deviceInfo: string | null): string {
-    if (!deviceInfo) return "—";
-    // Extract browser/OS from user agent (simple heuristic)
-    const ua = deviceInfo.toLowerCase();
-    let browser = "Unknown";
-    let os = "Unknown";
-
-    if (ua.includes("edg/")) browser = "Edge";
-    else if (ua.includes("chrome") && !ua.includes("edg")) browser = "Chrome";
-    else if (ua.includes("firefox")) browser = "Firefox";
-    else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
-    else if (ua.includes("opera") || ua.includes("opr/")) browser = "Opera";
-
-    if (ua.includes("windows")) os = "Windows";
-    else if (ua.includes("mac")) os = "macOS";
-    else if (ua.includes("linux")) os = "Linux";
-    else if (ua.includes("android")) os = "Android";
-    else if (ua.includes("iphone") || ua.includes("ipad")) os = "iOS";
-
-    return `${browser} on ${os}`;
-  }
-
-  function formatLocation(lat: number | null, lng: number | null, accuracy: number | null, error: string | null, city: string | null) {
-    if (error) return <span className="text-amber-600 text-xs">Error: {error}</span>;
-
-    const googleMapsUrl = lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : null;
-    const accuracyText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
-
-    // City available (new logins)
-    if (city) {
-      return (
-        <div className="space-y-1">
-          <div className="text-xs font-semibold text-slate-700">📍 {city}{accuracyText}</div>
-          {googleMapsUrl && (
-            <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-              </svg>
-              View on Map
-            </a>
-          )}
-        </div>
-      );
-    }
-
-    // No GPS at all
-    if (lat === null || lng === null) return <span className="text-slate-400 text-xs">No GPS</span>;
-
-    // Old logins — city null but coords available: show CityFetcher
-    return <CityFetcher lat={lat} lng={lng} accuracy={accuracy} />;
-  }
-
-  // ── Delete record ─────────────────────────────────────────────────────────
-  async function handleDelete(recordId: string) {
-    if (confirmDelete !== recordId) {
-      setConfirmDelete(recordId);
-      return;
-    }
-
+  async function deleteAllForIp(ip: string) {
+    const ids = dateGroups.flatMap((dg) => dg.ipGroups.find((g) => g.ip === ip)?.records.map((r) => r.id) ?? []);
     try {
-      const res = await fetch(`/api/login-activity?id=${recordId}`, {
-        method: "DELETE",
-        headers: { "x-user-role": "admin" },
-      });
-      if (res.ok) {
-        setRecords((prev) => prev.filter((r) => r.id !== recordId));
-        showNotice("Login record deleted.");
-      } else {
-        const data = await res.json();
-        showNotice(data.error ?? "Failed to delete record.", true);
+      await Promise.all(ids.map((id) => fetch(`/api/login-activity?id=${id}`, { method: "DELETE", headers: { "x-user-role": "admin" } })));
+      setRecords((p) => p.filter((r) => (r.ip_address ?? "unknown") !== ip));
+      setExpanded((p) => { const n = new Set(p); n.delete(ip); return n; });
+      notify(`All records for ${ip} deleted.`);
+    } catch { notify("Delete failed.", true); }
+  }
+
+  function toggle(key: string) { setExpanded((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; }); }
+
+  // ── Excel download ────────────────────────────────────────────────────────
+  async function downloadExcel() {
+    const XLSX = (await import("xlsx-js-style")).default;
+
+    // Flatten all records sorted by date desc
+    const sorted = [...records].sort((a, b) => b.logged_in_at.localeCompare(a.logged_in_at));
+
+    const headers = ["Date & Time", "Username", "IP Address", "IP Label", "Device / Browser", "City", "Location Link", "Latitude", "Longitude", "GPS Accuracy (m)"];
+    const colWidths = [22, 14, 16, 14, 18, 28, 52, 12, 12, 18];
+
+    // Style definitions
+    const borderThin = { style: "thin", color: { rgb: "B0C4DE" } };
+    const borderMedium = { style: "medium", color: { rgb: "2563EB" } };
+    const allBorderThin = { top: borderThin, bottom: borderThin, left: borderThin, right: borderThin };
+    const allBorderMedium = { top: borderMedium, bottom: borderMedium, left: borderMedium, right: borderMedium };
+
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+      fill: { fgColor: { rgb: "1E3A5F" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: allBorderMedium,
+    };
+
+    const rowStyleEven = (col: number) => ({
+      font: { sz: 10, color: { rgb: "1E293B" } },
+      fill: { fgColor: { rgb: "EFF6FF" } },
+      alignment: { horizontal: col >= 7 ? "center" : "left", vertical: "center", wrapText: true },
+      border: allBorderThin,
+    });
+
+    const rowStyleOdd = (col: number) => ({
+      font: { sz: 10, color: { rgb: "1E293B" } },
+      fill: { fgColor: { rgb: "FFFFFF" } },
+      alignment: { horizontal: col >= 7 ? "center" : "left", vertical: "center", wrapText: true },
+      border: allBorderThin,
+    });
+
+    // Build worksheet data as array of arrays
+    const wsData: unknown[][] = [headers];
+    for (const r of sorted) {
+      const hasCoords = r.latitude !== null && r.longitude !== null;
+      wsData.push([
+        fmtDT(r.logged_in_at),
+        r.username,
+        r.ip_address ?? "",
+        ipLabels.get(r.ip_address ?? "") ?? "",
+        fmtDevice(r.device_info),
+        r.city ?? "",
+        hasCoords ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}` : "",
+        r.latitude ?? "",
+        r.longitude ?? "",
+        r.gps_accuracy ?? "",
+      ]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Apply styles cell by cell
+    for (let row = 0; row < wsData.length; row++) {
+      for (let col = 0; col < headers.length; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[cellRef]) ws[cellRef] = { t: "z", v: "" };
+        if (row === 0) {
+          ws[cellRef].s = headerStyle;
+        } else {
+          ws[cellRef].s = row % 2 === 0 ? rowStyleEven(col) : rowStyleOdd(col);
+        }
       }
-    } catch {
-      showNotice("Network error deleting record.", true);
-    } finally {
-      setConfirmDelete(null);
     }
+
+    // Column widths
+    ws["!cols"] = colWidths.map((wch) => ({ wch }));
+
+    // Row heights — header taller, data rows auto
+    ws["!rows"] = [{ hpt: 28 }, ...sorted.map(() => ({ hpt: 20 }))];
+
+    // Freeze header row
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Login Activity");
+    XLSX.writeFile(wb, `login-activity-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  if (loggedRole !== "admin") {
-    return null;
-  }
+  if (loggedRole !== "admin") return null;
 
   const shell = (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm sm:p-5"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div
-        ref={dialogRef}
-        id="login-activity-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="login-activity-title"
-        onKeyDown={handleDialogKeyDown}
-        className="flex max-h-[92dvh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-      >
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 backdrop-blur-sm"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="la-title"
+        onKeyDown={handleKeyDown}
+        className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
+        <div className="flex flex-shrink-0 items-center justify-between px-4 py-2.5"
+          style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
-            <h2 id="login-activity-title" className="text-base font-bold text-white sm:text-lg">Login Activity</h2>
-            <p className="text-xs text-blue-200">Security monitoring · Prestair Systems</p>
+            <h2 id="la-title" className="text-sm font-bold text-white">Login Activity</h2>
+            <p className="text-[11px] text-blue-200">Date → IP grouped · Click to expand</p>
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-2.5 py-1.5 text-xl text-white/75 hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/60"
-            aria-label="Close login activity"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => void downloadExcel()}
+              className="flex items-center gap-1.5 rounded-lg bg-green-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-600">
+              ⬇ Excel
+            </button>
+            <button ref={closeButtonRef} type="button" onClick={onClose}
+              className="rounded-lg px-2 py-1 text-lg text-white/75 hover:bg-white/10 hover:text-white focus:outline-none">✕</button>
+          </div>
         </div>
 
         {/* Notice */}
         {notice && (
-          <div
-            role={notice.error ? "alert" : "status"}
-            aria-live="polite"
-            className={`mx-5 mt-4 flex-shrink-0 rounded-lg border px-4 py-2 text-sm sm:mx-6 ${
-              notice.error
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-green-200 bg-green-50 text-green-700"
-            }`}
-          >
+          <div role={notice.err ? "alert" : "status"}
+            className={`mx-4 mt-2 flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs ${notice.err ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-700"}`}>
             {notice.text}
           </div>
         )}
 
         {/* Content */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex items-center gap-3">
-                <svg className="animate-spin h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                <span className="text-slate-600">Loading login activity...</span>
-              </div>
+            <div className="flex items-center justify-center py-10">
+              <svg className="h-5 w-5 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <span className="ml-2 text-sm text-slate-500">Loading…</span>
             </div>
-          ) : records.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🔍</div>
-              <p className="text-slate-500 text-lg">No login activity found</p>
-              <p className="text-slate-400 text-sm mt-2">Login records will appear here once users sign in</p>
-            </div>
+          ) : dateGroups.length === 0 ? (
+            <div className="py-10 text-center text-slate-400">No login activity found</div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <div className="max-h-[60dvh] overflow-auto">
-                <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                  <caption className="sr-only">Login activity records</caption>
-                  <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-32">Date & Time</th>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-24">Username</th>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-32">IP Address</th>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-40">Device / Browser</th>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-48">Location</th>
-                      <th scope="col" className="border-b border-slate-200 px-4 py-3 w-20">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {records.map((record) => (
-                      <tr key={record.id} className="align-top hover:bg-slate-50/80">
-                        <td className="px-4 py-3">
-                          <time className="text-slate-700 font-medium">
-                            {formatDateTime(record.logged_in_at)}
-                          </time>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-slate-600">@{record.username}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-slate-600 text-xs">
-                            {record.ip_address || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-slate-600 text-xs">
-                            {formatDevice(record.device_info)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {formatLocation(record.latitude, record.longitude, record.gps_accuracy, record.gps_error, record.city)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(record.id)}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              confirmDelete === record.id
-                                ? "bg-red-600 text-white"
-                                : "bg-red-50 text-red-600 hover:bg-red-100"
-                            }`}
-                            title={confirmDelete === record.id ? "Click again to confirm deletion" : "Delete this login record"}
-                          >
-                            {confirmDelete === record.id ? "Confirm?" : "Delete"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="space-y-3">
+              {dateGroups.map((dg) => (
+                <div key={dg.date}>
+                  {/* Date header */}
+                  <div className="mb-1 flex items-center gap-2 border-b border-slate-200 pb-0.5">
+                    <span className="text-xs font-bold text-slate-700">📅 {dg.displayDate}</span>
+                    <span className="text-[11px] text-slate-400">
+                      {dg.ipGroups.reduce((s, g) => s + g.count, 0)} logins · {dg.ipGroups.length} IP{dg.ipGroups.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+
+                  {/* IP groups */}
+                  <div className="space-y-1 pl-3">
+                    {dg.ipGroups.map((group) => {
+                      const key = `${dg.date}__${group.ip}`;
+                      const label = ipLabels.get(group.ip);
+                      return (
+                        <div key={key} className="overflow-hidden rounded-lg border border-slate-200">
+                          {/* IP row */}
+                          <div className="flex cursor-pointer items-center justify-between bg-slate-50 px-3 py-1.5 hover:bg-slate-100"
+                            onClick={() => toggle(key)}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-slate-500">{expanded.has(key) ? "▼" : "▶"}</span>
+                              <span className="font-mono text-xs font-bold text-slate-800">{group.ip}</span>
+                              {label && <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700">({label})</span>}
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">{group.count} login{group.count !== 1 ? "s" : ""}</span>
+                              <span className="text-[11px] text-slate-500">Last: {fmtTime(group.lastSeen)}</span>
+                            </div>
+                            <button type="button"
+                              onClick={(e) => { e.stopPropagation(); void deleteAllForIp(group.ip); }}
+                              className="rounded bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100">
+                              🗑 Del All
+                            </button>
+                          </div>
+
+                          {/* Expanded rows */}
+                          {expanded.has(key) && (
+                            <div className="overflow-x-auto border-t border-slate-200">
+                              <table className="w-full border-collapse text-left">
+                                <thead className="bg-slate-700 text-[10px] uppercase text-white">
+                                  <tr>
+                                    <th className="px-2 py-1.5">Time</th>
+                                    <th className="px-2 py-1.5">User</th>
+                                    <th className="px-2 py-1.5">Device</th>
+                                    <th className="px-2 py-1.5">Location</th>
+                                    <th className="px-2 py-1.5 text-center">Del</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 bg-white">
+                                  {group.records.map((r) => (
+                                    <tr key={r.id} className="hover:bg-slate-50">
+                                      <td className="px-2 py-1 text-[11px] text-slate-700 whitespace-nowrap">{fmtTime(r.logged_in_at)}</td>
+                                      <td className="px-2 py-1 font-mono text-[11px] text-slate-700">@{r.username}</td>
+                                      <td className="px-2 py-1 text-[11px] text-slate-600 whitespace-nowrap">{fmtDevice(r.device_info)}</td>
+                                      <td className="px-2 py-1"><LocationInline r={r} /></td>
+                                      <td className="px-2 py-1 text-center">
+                                        <button type="button" onClick={() => void deleteRecord(r.id)}
+                                          className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-100">✕</button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50 px-5 py-3 text-xs text-slate-500 sm:px-6">
-          Total {records.length} login records
+        <div className="flex flex-shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-1.5 text-[11px] text-slate-500">
+          <span>{dateGroups.length} date{dateGroups.length !== 1 ? "s" : ""} · {records.length} total records</span>
+          <button type="button" onClick={() => void load()} className="text-blue-500 hover:underline">↺ Refresh</button>
         </div>
       </div>
     </div>

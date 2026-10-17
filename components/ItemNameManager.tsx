@@ -17,6 +17,85 @@ type ItemNameEntry = {
 
 type Notice = { message: string; error: boolean };
 
+// ── Formula explanation component ────────────────────────────────────────────
+function FormulaHelp({ type }: { type: RateRule["type"] }) {
+  const content: Record<RateRule["type"], { formula: string; note: string; examples: { label: string; calc: string; result: string }[] }> = {
+    standard: {
+      formula: "SIZE = STD → Standard Rate\nSIZE = L (inch/mm) → feet(L) × Rate/Foot",
+      note: "No dimensions (STD) always picks Standard Rate, bypassing all other rules.",
+      examples: [
+        { label: "STD size, Std Rate = ₹50,000", calc: "STD → use Standard Rate", result: "₹50,000" },
+        { label: "L = 36 INCH, Rate/ft = ₹4,000", calc: "36 ÷ 12 = 3.0 ft × ₹4,000", result: "₹12,000" },
+      ],
+    },
+    perfoot: {
+      formula: "feet(L) × Rate/Foot (exact feet)",
+      note: "MM → divide by 304.8. INCH → divide by 12. No rounding applied.",
+      examples: [
+        { label: "L = 36 INCH, Rate/ft = ₹4,000", calc: "36 ÷ 12 = 3.0 ft × ₹4,000", result: "₹12,000" },
+        { label: "L = 900 MM, Rate/ft = ₹4,000", calc: "900 ÷ 304.8 = 2.95 ft × ₹4,000", result: "₹11,811" },
+      ],
+    },
+    table: {
+      formula: "roundFeet(L) × Rate/Foot\n0.25 cutoff: frac ≤ 0.25 → floor, else → ceil",
+      note: "Fractions up to 0.25 are ignored; anything above rounds up to next whole foot.",
+      examples: [
+        { label: "L = 39 INCH (3.25 ft → frac=0.25 ≤ 0.25)", calc: "floor(3.25) = 3 ft × ₹4,000", result: "₹12,000" },
+        { label: "L = 40 INCH (3.33 ft → frac=0.33 > 0.25)", calc: "ceil(3.33) = 4 ft × ₹4,000", result: "₹16,000" },
+        { label: "L = 48 INCH (4.0 ft)", calc: "4 ft × ₹4,000", result: "₹16,000" },
+      ],
+    },
+    conditionalL: {
+      formula: "L(inch) ≤ threshold → feet(L) × rateLow\nL(inch) > threshold → feet(L) × rateHigh",
+      note: "L is always converted to inches first before comparing with threshold.",
+      examples: [
+        { label: "Burner Range: threshold=30, low=₹9000, high=₹7000", calc: "", result: "" },
+        { label: "L = 30 INCH (≤ 30)", calc: "30 ÷ 12 = 2.5 ft × ₹9,000", result: "₹22,500" },
+        { label: "L = 36 INCH (> 30)", calc: "36 ÷ 12 = 3.0 ft × ₹7,000", result: "₹21,000" },
+        { label: "L = 900 MM → 35.4\" (> 30)", calc: "900 ÷ 304.8 = 2.95 ft × ₹7,000", result: "₹20,670" },
+      ],
+    },
+    volume: {
+      formula: "feet(L) × feet(B) × multiplier (exact feet)",
+      note: "Both L and B are required. Used for Exhaust Hoods (area × rate).",
+      examples: [
+        { label: "Exhaust Hood Without: multiplier=1800", calc: "", result: "" },
+        { label: "L=765mm, B=760mm", calc: "(765÷304.8) × (760÷304.8) × 1800\n= 2.51 × 2.49 × 1800", result: "₹11,253" },
+        { label: "Exhaust Hood With: multiplier=2100", calc: "", result: "" },
+        { label: "L=1200mm, B=900mm", calc: "(1200÷304.8) × (900÷304.8) × 2100\n= 3.94 × 2.95 × 2100", result: "₹24,421" },
+      ],
+    },
+  };
+
+  const info = content[type];
+  return (
+    <div className="space-y-3 text-xs">
+      {/* Formula */}
+      <div>
+        <div className="mb-1 font-bold text-slate-700">📐 Formula</div>
+        <pre className="whitespace-pre-wrap rounded bg-slate-50 px-3 py-2 text-[11px] font-mono text-slate-800 border border-slate-200">{info.formula}</pre>
+      </div>
+      {/* Note */}
+      <div className="rounded bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] text-amber-800">
+        💡 {info.note}
+      </div>
+      {/* Examples */}
+      <div>
+        <div className="mb-1 font-bold text-slate-700">📊 Examples</div>
+        <div className="space-y-1.5">
+          {info.examples.map((ex, i) => (
+            <div key={i} className={`rounded px-2 py-1.5 ${ex.calc ? "bg-green-50 border border-green-100" : "bg-blue-50 border border-blue-100"}`}>
+              <div className="font-semibold text-slate-700">{ex.label}</div>
+              {ex.calc && <div className="mt-0.5 font-mono text-[10px] text-slate-600 whitespace-pre-wrap">{ex.calc}</div>}
+              {ex.result && <div className="mt-0.5 font-bold text-green-700">= {ex.result}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ItemNameManager({ onClose }: { onClose: () => void }) {
   const { loggedRole } = useAuth();
   const [entries, setEntries] = useState<ItemNameEntry[]>([]);
@@ -33,6 +112,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
   const [editRuleLow, setEditRuleLow] = useState("");
   const [editRuleHigh, setEditRuleHigh] = useState("");
   const [editRuleMultiplier, setEditRuleMultiplier] = useState("");
+  const [showFormulaHelp, setShowFormulaHelp] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -406,6 +486,27 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                                 <option value="conditionalL">Conditional by L (threshold inch → two rates)</option>
                                 <option value="volume">Volume (Lft × Bft × multiplier)</option>
                               </select>
+
+                              {/* ℹ Formula info button */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowFormulaHelp((v) => !v)}
+                                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-blue-300 bg-blue-50 text-sm font-bold text-blue-600 hover:bg-blue-100"
+                                  title="Formula explanation with example"
+                                >ℹ</button>
+
+                                {showFormulaHelp && (
+                                  <div className="absolute left-0 top-9 z-50 w-80 rounded-xl border border-blue-200 bg-white p-4 shadow-xl"
+                                    style={{ minWidth: 320 }}>
+                                    <div className="mb-2 flex items-center justify-between">
+                                      <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">Formula Details</span>
+                                      <button type="button" onClick={() => setShowFormulaHelp(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                                    </div>
+                                    <FormulaHelp type={editRuleType} />
+                                  </div>
+                                )}
+                              </div>
 
                               {editRuleType === "conditionalL" && (
                                 <div className="flex flex-wrap items-center gap-2">

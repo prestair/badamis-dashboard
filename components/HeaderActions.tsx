@@ -11,6 +11,7 @@ const QuotationViewModal = dynamic(() => import("@/components/QuotationViewModal
 const ItemNameManager    = dynamic(() => import("@/components/ItemNameManager"),    { ssr: false });
 const RequesterManager   = dynamic(() => import("@/components/RequesterManager"),   { ssr: false });
 const HsnManager         = dynamic(() => import("@/components/HsnManager"),         { ssr: false });
+const AuthorisedIpManager = dynamic(() => import("@/components/AuthorisedIpManager"), { ssr: false });
 
 type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
@@ -45,6 +46,7 @@ export default function HeaderActions() {
   const [showItemNames,    setShowItemNames]    = useState(false);
   const [showRequesters,   setShowRequesters]   = useState(false);
   const [showHsn,          setShowHsn]          = useState(false);
+  const [showAuthorisedIps, setShowAuthorisedIps] = useState(false);
   const [editQuotation, setEditQuotation] = useState<SavedQuotation | null>(null);
   const [viewQuotation, setViewQuotation] = useState<SavedQuotation | null>(null);
   const [pageSize]       = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -390,6 +392,15 @@ export default function HeaderActions() {
         >
           HSN Codes
         </button>
+        {loggedRole === "admin" && (
+          <button
+            type="button"
+            onClick={() => setShowAuthorisedIps(true)}
+            className="flex items-center gap-2 rounded-lg border border-teal-400 bg-teal-50 px-5 py-2 text-sm font-semibold text-teal-700 shadow-sm transition-all hover:bg-teal-100 active:scale-95"
+          >
+            🔐 Authorised IPs
+          </button>
+        )}
         {/* Refresh + Search on same line */}
         <button
           type="button"
@@ -682,6 +693,7 @@ export default function HeaderActions() {
       {showItemNames  && <ItemNameManager onClose={() => setShowItemNames(false)} />}
       {showRequesters && <RequesterManager onClose={() => setShowRequesters(false)} />}
       {showHsn        && <HsnManager onClose={() => setShowHsn(false)} />}
+      {showAuthorisedIps && <AuthorisedIpManager onClose={() => setShowAuthorisedIps(false)} />}
       {editQuotation  && <QuotationModal onClose={() => setEditQuotation(null)} initialData={editQuotation} />}
       {viewQuotation  && (
         <QuotationViewModal

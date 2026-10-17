@@ -83,13 +83,15 @@ export default function LoginPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        // Cap accuracy — if better than 50m (high-precision GPS), use network-level ~1000-2000m
+        // We accept any accuracy; just record what the browser gives
         const city = await getCityName(lat, lng);
         setGps({ status: "granted", lat, lng, accuracy, city });
       },
       (err) => {
         setGps({ status: "denied", code: err.code, message: getDenialInstructions(err.code) });
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     );
   }, []);
 
@@ -130,7 +132,26 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const currentGps = gps; // capture snapshot to avoid narrowing issues
+      // ── IP authorisation check ────────────────────────────────────────────
+      try {
+        const ipCheck = await fetch(
+          `/api/check-ip?username=${encodeURIComponent(username.trim())}`,
+          { cache: "no-store" }
+        );
+        if (ipCheck.ok) {
+          const ipResult = await ipCheck.json();
+          if (ipResult.allowed === false) {
+            setFormError("Unauthorised IP Address, please contact administrator to approve your IP.");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // If check-ip fails, proceed — fail open so users aren't locked out.
+      }
+
+      // ── GPS payload ───────────────────────────────────────────────────────
+      const currentGps = gps;
       const gpsPayload =
         currentGps.status === "granted"
           ? { latitude: currentGps.lat, longitude: currentGps.lng, gpsAccuracy: currentGps.accuracy, city: currentGps.city }
