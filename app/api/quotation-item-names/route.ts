@@ -26,7 +26,7 @@ export async function GET() {
     if (supabase) {
       const { data, error } = await supabase
         .from("quotation_item_names")
-        .select("id, item_name, rate, standard_rate, created_at, updated_at")
+        .select("id, item_name, rate, standard_rate, rate_rule, created_at, updated_at")
         .order("item_name", { ascending: true });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data ?? []);
@@ -62,6 +62,8 @@ export async function POST(request: Request) {
     const standardRate = body.standardRate !== undefined && body.standardRate !== "" && Number.isFinite(rawStd) && rawStd >= 0
       ? rawStd
       : null;
+    // Rate rule — optional JSON object (null when not provided).
+    const rateRule = body.rateRule && typeof body.rateRule === "object" ? body.rateRule : null;
 
     const publicSupabase = getSupabaseClient();
     if (publicSupabase) {
@@ -74,8 +76,8 @@ export async function POST(request: Request) {
       }
       const { data, error } = await adminSupabase
         .from("quotation_item_names")
-        .insert({ item_name: itemName, rate, standard_rate: standardRate })
-        .select("id, item_name, rate, standard_rate, created_at, updated_at")
+        .insert({ item_name: itemName, rate, standard_rate: standardRate, rate_rule: rateRule })
+        .select("id, item_name, rate, standard_rate, rate_rule, created_at, updated_at")
         .single();
       if (error?.code === "23505") {
         return NextResponse.json({ error: "This Item Name already exists." }, { status: 409 });

@@ -40,6 +40,9 @@ export type SavedRowState = {
   itemRate?: string;
   stdRate?: string;
   calcRate?: string;
+  // Rate-rule snapshot (how calcRate was derived) — stored so old quotations
+  // never change when the Item Names rule is edited later.
+  rateRule?: unknown;
 };
 
 export type SavedQuotation = {
@@ -141,6 +144,7 @@ function normalizeSavedRows(items: unknown[]): SavedRowState[] {
       itemRate: row.itemRate !== undefined ? String(row.itemRate) : undefined,
       stdRate: row.stdRate !== undefined ? String(row.stdRate) : undefined,
       calcRate: row.calcRate !== undefined ? String(row.calcRate) : undefined,
+      rateRule: row.rateRule !== undefined ? row.rateRule : undefined,
     };
   });
 }

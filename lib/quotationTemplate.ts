@@ -1,6 +1,7 @@
 // Quotation Excel template export & import utilities
 import type { SavedRowState } from "@/context/QuotationContext";
 import type { QuotationDiscounts } from "@/lib/quotationAudit";
+import { parseRateRule, computeCalcRateByRule } from "@/lib/rateRules";
 
 // 13 columns. Dimensions (MM/INCH, L, B, H, B/S) drive SIZE + Calculated Rate
 // on import. Leave them blank + fill SIZE directly for a "STD"/manual size.
@@ -29,39 +30,15 @@ export function tplComposeSize(unit: string, dimL?: string, dimB?: string, dimH?
   return size;
 }
 
-// Calculated Rate (same rules as the modal):
-//  - unit+L blank (STD) → standard rate.
-//  - L present → round(L in feet, 0.25 cutoff) * perFootRate.
-//  - missing rate → "".
-export function tplComputeCalcRate(
-  unit: string, dimL: string | undefined, perFootRate: string, stdRate: string
-): string {
-  const u = unit === "INCH" ? "INCH" : "MM";
-  const l = Number(tplClean(dimL));
-  const hasL = Number.isFinite(l) && l > 0;
-  const hasUnit = unit === "MM" || unit === "INCH";
-  if (!hasUnit && !hasL) {
-    const s = Number((stdRate ?? "").trim());
-    return Number.isFinite(s) && s > 0 ? String(s) : "";
-  }
-  if (!hasL) return "";
-  const pf = Number((perFootRate ?? "").trim());
-  if (!Number.isFinite(pf) || pf <= 0) return "";
-  const feet = u === "MM" ? l / 304.8 : l / 12;
-  const frac = feet - Math.floor(feet);
-  const roundedFeet = frac <= 0.25 ? Math.floor(feet) : Math.ceil(feet);
-  return String(roundedFeet * pf);
-}
-
 // Per-item rate lookup from the Item Names list (trimmed, case-insensitive).
-export type ItemRateLookup = { item_name: string; rate?: number | null; standard_rate?: number | null };
-function lookupRates(desc: string, opts: ItemRateLookup[]): { rate: string; std: string } {
+export type ItemRateLookup = { item_name: string; rate?: number | null; standard_rate?: number | null; rate_rule?: unknown };
+function lookupRates(desc: string, opts: ItemRateLookup[]): { rate: string; std: string; rule: unknown } {
   const key = (desc ?? "").trim().toLowerCase();
-  if (!key) return { rate: "", std: "" };
+  if (!key) return { rate: "", std: "", rule: undefined };
   const m = opts.find((o) => o.item_name.trim().toLowerCase() === key);
   const rate = m?.rate !== undefined && m?.rate !== null && Number.isFinite(Number(m.rate)) ? String(m.rate) : "";
   const std = m?.standard_rate !== undefined && m?.standard_rate !== null && Number.isFinite(Number(m.standard_rate)) ? String(m.standard_rate) : "";
-  return { rate, std };
+  return { rate, std, rule: m?.rate_rule };
 }
 
 // ── Export blank template ─────────────────────────────────────────────────────
@@ -265,18 +242,23 @@ function parseRows(
     const hasDimInputs = !!(unit || dimL.trim() || dimB.trim() || dimH.trim() || dimBS.trim());
     const size = hasDimInputs ? tplComposeSize(unit, dimL, dimB, dimH, dimBS) : (sizeCell || "STD");
 
-    // Snapshot per-item rates from the Item Names table, then compute CALC. RATE.
-    const { rate: perFoot, std } = lookupRates(itemName, itemRates);
-    const calcRate = tplComputeCalcRate(unit, dimL, perFoot, std);
+    // Snapshot per-item rates + rule from the Item Names table, compute CALC. RATE.
+    const { rate: perFoot, std, rule: ruleRaw } = lookupRates(itemName, itemRates);
+    const rule = parseRateRule(ruleRaw);
+    const calcRate = computeCalcRateByRule(
+      unit === "INCH" ? "INCH" : (unit === "MM" ? "MM" : ""),
+      dimL, dimB, perFoot, std, rule,
+    );
 
     rows.push({
       id: itemCode || `item-${slNo}`, rowType: "item", desc: itemName, size, hsn,
       section: currentSection || "Custom", qty, additionalColumn: addDesc,
       discount: 0, discountIsPerUnit: false, rate, amt: rate !== null ? qty * rate : null, checked: true,
-      // New snapshot fields so the imported quotation behaves like a modal-made one.
+      // Snapshot fields so the imported quotation behaves like a modal-made one.
       mmInch: unit === "INCH" ? "INCH" : (unit === "MM" ? "MM" : undefined),
       dimL: dimL || undefined, dimB: dimB || undefined, dimH: dimH || undefined, dimBS: dimBS || undefined,
       itemRate: perFoot || undefined, stdRate: std || undefined, calcRate: calcRate || undefined,
+      rateRule: rule,
     });
   }
 

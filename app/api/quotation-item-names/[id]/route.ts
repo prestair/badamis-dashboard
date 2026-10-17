@@ -51,6 +51,10 @@ export async function PUT(
         ? null
         : (Number.isFinite(rawStd) && rawStd >= 0 ? rawStd : null);
 
+    // Rate rule — JSON object, or null to clear. Absent → leave unchanged.
+    const ruleProvided = body.rateRule !== undefined;
+    const ruleValue = body.rateRule && typeof body.rateRule === "object" ? body.rateRule : null;
+
     const publicSupabase = getSupabaseClient();
     if (publicSupabase) {
       const adminSupabase = getSupabaseAdminClient();
@@ -66,12 +70,13 @@ export async function PUT(
       };
       if (rateProvided) updatePayload.rate = rateValue;
       if (stdProvided) updatePayload.standard_rate = stdValue;
+      if (ruleProvided) updatePayload.rate_rule = ruleValue;
 
       const { data, error } = await adminSupabase
         .from("quotation_item_names")
         .update(updatePayload)
         .eq("id", id)
-        .select("id, item_name, rate, standard_rate, created_at, updated_at")
+        .select("id, item_name, rate, standard_rate, rate_rule, created_at, updated_at")
         .single();
       if (error?.code === "23505") {
         return NextResponse.json({ error: "This Item Name already exists." }, { status: 409 });

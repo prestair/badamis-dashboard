@@ -112,7 +112,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
     <>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
       <div role="dialog" aria-modal="true"
-        className="fixed inset-2 sm:inset-3 z-50 flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden">
+        className="fixed inset-0 z-50 flex flex-col bg-white shadow-2xl overflow-hidden">
 
         {/* ── TOP BAR ── */}
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0"
@@ -199,7 +199,7 @@ export default function QuotationViewModal({ quotation: q, onClose, onEdit }: Pr
 
         {/* ── BODY ── */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="max-w-5xl mx-auto p-4 space-y-4">
+          <div className="max-w-full mx-auto p-4 space-y-4">
 
             {/* Quotation Document */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

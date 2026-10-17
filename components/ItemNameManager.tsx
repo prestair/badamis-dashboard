@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
+import { type RateRule, parseRateRule } from "@/lib/rateRules";
 
 type ItemNameEntry = {
   id: string;
   item_name: string;
   rate?: number | null;
   standard_rate?: number | null;
+  rate_rule?: RateRule | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -25,6 +27,12 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
   const [editingStdRate, setEditingStdRate] = useState("");
   const [newItemRate, setNewItemRate] = useState("");
   const [newItemStdRate, setNewItemStdRate] = useState("");
+  // Rate-rule editing state (used in the Edit row).
+  const [editRuleType, setEditRuleType] = useState<RateRule["type"]>("standard");
+  const [editRuleThreshold, setEditRuleThreshold] = useState("");
+  const [editRuleLow, setEditRuleLow] = useState("");
+  const [editRuleHigh, setEditRuleHigh] = useState("");
+  const [editRuleMultiplier, setEditRuleMultiplier] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -136,6 +144,13 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
     setEditingValue(entry.item_name);
     setEditingRate(entry.rate === null || entry.rate === undefined ? "" : String(entry.rate));
     setEditingStdRate(entry.standard_rate === null || entry.standard_rate === undefined ? "" : String(entry.standard_rate));
+    // Load the rate rule into the edit fields.
+    const rule = parseRateRule(entry.rate_rule);
+    setEditRuleType(rule.type);
+    setEditRuleThreshold(rule.type === "conditionalL" ? String(rule.thresholdInch) : "");
+    setEditRuleLow(rule.type === "conditionalL" ? String(rule.rateLow) : "");
+    setEditRuleHigh(rule.type === "conditionalL" ? String(rule.rateHigh) : "");
+    setEditRuleMultiplier(rule.type === "volume" ? String(rule.multiplier) : "");
     setNotice(null);
   }
 
@@ -155,13 +170,25 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
         const n = Number(t);
         return t === "" ? "" : (Number.isFinite(n) && n >= 0 ? n : "");
       };
+      // Build the rate rule object from the edit fields.
+      let rateRule: RateRule;
+      if (editRuleType === "perfoot") rateRule = { type: "perfoot" };
+      else if (editRuleType === "conditionalL") rateRule = {
+        type: "conditionalL",
+        thresholdInch: Number(editRuleThreshold) || 0,
+        rateLow: Number(editRuleLow) || 0,
+        rateHigh: Number(editRuleHigh) || 0,
+      };
+      else if (editRuleType === "volume") rateRule = { type: "volume", multiplier: Number(editRuleMultiplier) || 0 };
+      else rateRule = { type: "standard" };
+
       const response = await fetch(`/api/quotation-item-names/${editingId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "x-user-role": loggedRole ?? "",
         },
-        body: JSON.stringify({ itemName, rate: toSend(editingRate), standardRate: toSend(editingStdRate) }),
+        body: JSON.stringify({ itemName, rate: toSend(editingRate), standardRate: toSend(editingStdRate), rateRule }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to update Item Name.");
@@ -187,7 +214,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="item-name-manager-title"
-        className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white text-slate-800 shadow-2xl"
+        className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white text-slate-800 shadow-2xl"
       >
         <header className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f,#2563eb)" }}>
           <div>
@@ -288,13 +315,13 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="sticky top-0 bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="border-b border-slate-200 px-4 py-3">Item Name</th>
-                      <th className="w-32 border-b border-slate-200 px-4 py-3 text-right">Rate Per Foot</th>
-                      <th className="w-32 border-b border-slate-200 px-4 py-3 text-right">Standard Rate</th>
-                      <th className="w-40 border-b border-slate-200 px-4 py-3 text-center">Action</th>
+                      <th className="border-b border-slate-200 px-3 py-2">Item Name</th>
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">Rate Per Foot</th>
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">Standard Rate</th>
+                      <th className="w-32 border-b border-slate-200 px-3 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -303,8 +330,9 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                     ) : filteredEntries.length === 0 ? (
                       <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">No Item Names found.</td></tr>
                     ) : filteredEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-blue-50/60">
-                        <td className="px-4 py-3">
+                      <React.Fragment key={entry.id}>
+                      <tr className="hover:bg-blue-50/60">
+                        <td className="px-3 py-2">
                           {editingId === entry.id ? (
                             <input
                               autoFocus
@@ -319,7 +347,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                             />
                           ) : entry.item_name}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono">
+                        <td className="px-3 py-2 text-right font-mono">
                           {editingId === entry.id ? (
                             <input
                               type="number"
@@ -335,7 +363,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                             />
                           ) : (entry.rate === null || entry.rate === undefined ? <span className="text-slate-300">—</span> : `₹${Number(entry.rate).toLocaleString("en-IN")}`)}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono">
+                        <td className="px-3 py-2 text-right font-mono">
                           {editingId === entry.id ? (
                             <input
                               type="number"
@@ -351,7 +379,7 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                             />
                           ) : (entry.standard_rate === null || entry.standard_rate === undefined ? <span className="text-slate-300">—</span> : `₹${Number(entry.standard_rate).toLocaleString("en-IN")}`)}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2 text-center">
                           {editingId === entry.id ? (
                             <div className="flex justify-center gap-2">
                               <button type="button" onClick={() => void saveEdit()} disabled={saving} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">Save</button>
@@ -362,7 +390,53 @@ export default function ItemNameManager({ onClose }: { onClose: () => void }) {
                           )}
                         </td>
                       </tr>
-                    ))}
+                      {editingId === entry.id && (
+                        <tr className="bg-blue-50/40">
+                          <td colSpan={4} className="px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Rate Rule:</span>
+                              <select
+                                value={editRuleType}
+                                onChange={(e) => setEditRuleType(e.target.value as RateRule["type"])}
+                                className="rounded border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              >
+                                <option value="standard">Standard (STD→Standard Rate, else exact feet × Rate/Foot)</option>
+                                <option value="perfoot">Per Foot (exact feet × Rate/Foot)</option>
+                                <option value="table">Table (whole feet, 0.25 cutoff × Rate/Foot)</option>
+                                <option value="conditionalL">Conditional by L (threshold inch → two rates)</option>
+                                <option value="volume">Volume (Lft × Bft × multiplier)</option>
+                              </select>
+
+                              {editRuleType === "conditionalL" && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label className="text-xs text-slate-600">L ≤</label>
+                                  <input type="number" min={0} value={editRuleThreshold} onChange={(e) => setEditRuleThreshold(e.target.value)} placeholder="inch" title="Threshold in inches" className="w-20 rounded border border-slate-300 px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                                  <label className="text-xs text-slate-600">inch → ₹</label>
+                                  <input type="number" min={0} value={editRuleLow} onChange={(e) => setEditRuleLow(e.target.value)} placeholder="low /ft" title="Rate per foot when L ≤ threshold" className="w-24 rounded border border-slate-300 px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                                  <label className="text-xs text-slate-600">/ft, else ₹</label>
+                                  <input type="number" min={0} value={editRuleHigh} onChange={(e) => setEditRuleHigh(e.target.value)} placeholder="high /ft" title="Rate per foot when L > threshold" className="w-24 rounded border border-slate-300 px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                                  <label className="text-xs text-slate-600">/ft</label>
+                                </div>
+                              )}
+
+                              {editRuleType === "volume" && (
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-slate-600">Lft × Bft × </label>
+                                  <input type="number" min={0} value={editRuleMultiplier} onChange={(e) => setEditRuleMultiplier(e.target.value)} placeholder="e.g. 2100" title="Volume multiplier" className="w-28 rounded border border-slate-300 px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="mt-2 text-[11px] text-slate-400">
+                              {editRuleType === "standard" && "No dimensions → Standard Rate. With L → feet(L) × Rate Per Foot."}
+                              {editRuleType === "perfoot" && "Always feet(L) × Rate Per Foot (MM/INCH converted, 0.25-ft rounding)."}
+                              {editRuleType === "conditionalL" && "L is converted to inches; picks low/high per-foot rate, then feet(L) × rate."}
+                              {editRuleType === "volume" && "Rounded feet(L) × rounded feet(B) × multiplier (e.g. Exhaust Hood 2100 / 1800)."}
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
                   </tbody>
                 </table>
               </div>
