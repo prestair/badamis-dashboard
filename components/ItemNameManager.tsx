@@ -37,12 +37,13 @@ function FormulaHelp({ type }: { type: RateRule["type"] }) {
       ],
     },
     table: {
-      formula: "roundFeet(L) × Rate/Foot\n0.25 cutoff: frac ≤ 0.25 → floor, else → ceil",
-      note: "Fractions up to 0.25 are ignored; anything above rounds up to next whole foot.",
+      formula: "dominant = max(L, B)\nroundFeet(dominant) × Rate/Foot\n0.25 cutoff: frac ≤ 0.25 → floor, else → ceil",
+      note: "Longer dimension (L or B) is used. Fractions up to 0.25 are ignored; anything above rounds up to next whole foot.",
       examples: [
-        { label: "L = 39 INCH (3.25 ft → frac=0.25 ≤ 0.25)", calc: "floor(3.25) = 3 ft × ₹4,000", result: "₹12,000" },
-        { label: "L = 40 INCH (3.33 ft → frac=0.33 > 0.25)", calc: "ceil(3.33) = 4 ft × ₹4,000", result: "₹16,000" },
-        { label: "L = 48 INCH (4.0 ft)", calc: "4 ft × ₹4,000", result: "₹16,000" },
+        { label: "L=39\", B=30\" → dominant=L=39\" (3.25ft, frac=0.25 ≤ 0.25)", calc: "floor(3.25) = 3 ft × ₹4,000", result: "₹12,000" },
+        { label: "L=30\", B=40\" → dominant=B=40\" (3.33ft, frac=0.33 > 0.25)", calc: "ceil(3.33) = 4 ft × ₹4,000", result: "₹16,000" },
+        { label: "L=48\", B=36\" → dominant=L=48\" (4.0ft)", calc: "4 ft × ₹4,000", result: "₹16,000" },
+        { label: "Only L=900mm → dominant=L (2.95ft, frac=0.95 > 0.25)", calc: "ceil(2.95) = 3 ft × ₹4,000", result: "₹12,000" },
       ],
     },
     conditionalL: {

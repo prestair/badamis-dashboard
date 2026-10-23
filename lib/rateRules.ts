@@ -126,11 +126,15 @@ export function computeCalcRateByRule(
       return money(toFeet(l, u) * pf);
     }
     case "table": {
-      // 0.25-cutoff WHOLE-feet rounding (the original "Table" behaviour).
-      if (!hasL) return "";
+      // 0.25-cutoff WHOLE-feet rounding on the LONGER dimension (max of L and B).
+      // If only L is entered, use L. If only B is entered, use B. If both, use the larger.
+      const lVal = hasL ? l : 0;
+      const bVal = hasB ? b : 0;
+      if (!hasL && !hasB) return "";
+      const dominant = Math.max(lVal, bVal);
       const pf = Number((ratePerFoot ?? "").trim());
       if (!Number.isFinite(pf) || pf <= 0) return "";
-      return money(roundFeet(toFeet(l, u)) * pf);
+      return money(roundFeet(toFeet(dominant, u)) * pf);
     }
     case "standard":
     default: {
