@@ -37,13 +37,14 @@ function FormulaHelp({ type }: { type: RateRule["type"] }) {
       ],
     },
     table: {
-      formula: "dominant = max(L, B)\nroundFeet(dominant) × Rate/Foot\n0.25 cutoff: frac ≤ 0.25 → floor, else → ceil",
-      note: "Longer dimension (L or B) is used. Fractions up to 0.25 are ignored; anything above rounds up to next whole foot.",
+      formula: "dominant = max(L, B)\nroundFeet(dominant) × Rate/Foot\n\n0.25 cutoff rule:\n  frac ≤ 0.25  →  floor (round down)\n  frac > 0.25  →  ceil  (round up)",
+      note: "Longer of L or B is picked as dominant. If only one is entered, that one is used. STD (no dimensions) → Standard Rate directly.",
       examples: [
-        { label: "L=39\", B=30\" → dominant=L=39\" (3.25ft, frac=0.25 ≤ 0.25)", calc: "floor(3.25) = 3 ft × ₹4,000", result: "₹12,000" },
-        { label: "L=30\", B=40\" → dominant=B=40\" (3.33ft, frac=0.33 > 0.25)", calc: "ceil(3.33) = 4 ft × ₹4,000", result: "₹16,000" },
-        { label: "L=48\", B=36\" → dominant=L=48\" (4.0ft)", calc: "4 ft × ₹4,000", result: "₹16,000" },
-        { label: "Only L=900mm → dominant=L (2.95ft, frac=0.95 > 0.25)", calc: "ceil(2.95) = 3 ft × ₹4,000", result: "₹12,000" },
+        { label: "L=42\", B=30\" → dominant=L=42\"", calc: "42 ÷ 12 = 3.50 ft → frac=0.50 > 0.25 → ceil → 4 ft\n4 ft × ₹4,000", result: "₹16,000" },
+        { label: "L=39\", B=30\" → dominant=L=39\"", calc: "39 ÷ 12 = 3.25 ft → frac=0.25 ≤ 0.25 → floor → 3 ft\n3 ft × ₹4,000", result: "₹12,000" },
+        { label: "L=30\", B=40\" → dominant=B=40\"", calc: "40 ÷ 12 = 3.33 ft → frac=0.33 > 0.25 → ceil → 4 ft\n4 ft × ₹4,000", result: "₹16,000" },
+        { label: "L=900mm, B=600mm → dominant=L=900mm", calc: "900 ÷ 304.8 = 2.95 ft → frac=0.95 > 0.25 → ceil → 3 ft\n3 ft × ₹4,000", result: "₹12,000" },
+        { label: "L=48\", B=30\" → dominant=L=48\"", calc: "48 ÷ 12 = 4.00 ft → frac=0.00 ≤ 0.25 → floor → 4 ft\n4 ft × ₹4,000", result: "₹16,000" },
       ],
     },
     conditionalL: {
