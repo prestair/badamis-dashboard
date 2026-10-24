@@ -67,6 +67,13 @@ export default function LoginPage() {
   const [formError, setFormError]       = useState("");
   const [loading, setLoading]           = useState(false);
 
+  const [loginLocked, setLoginLocked]               = useState(false);
+  const [unlockCode, setUnlockCode]                 = useState("");
+  const [unlockError, setUnlockError]               = useState("");
+  const [unlockLoading, setUnlockLoading]           = useState(false);
+  const [lastUnauthorisedIp, setLastUnauthorisedIp] = useState("");
+  const [codeSent, setCodeSent]                     = useState(false);
+
   // GPS toggle — default ON
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const [gps, setGps]               = useState<GpsState>({ status: "idle" });
@@ -141,7 +148,19 @@ export default function LoginPage() {
         if (ipCheck.ok) {
           const ipResult = await ipCheck.json();
           if (ipResult.allowed === false) {
-            setFormError("Unauthorised IP Address, please contact administrator to approve your IP.");
+            // First attempt from unauthorised IP → immediately lock
+            setLoginLocked(true);
+            setLastUnauthorisedIp(ipResult.ip ?? "");
+            setFormError("LOGIN DISABLED ENTER CODE TO ENABLE");
+            if (!codeSent) {
+              setCodeSent(true);
+              // fire-and-forget unlock code email
+              fetch("/api/unlock-code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ip: ipResult.ip ?? "", username: username.trim() }),
+              }).catch(() => {});
+            }
             setLoading(false);
             return;
           }
@@ -170,6 +189,31 @@ export default function LoginPage() {
   }
 
   // ── GPS badge (shown below toggle area) ──────────────────────────────────
+  async function handleUnlock() {
+    if (unlockCode.length !== 6) { setUnlockError("Enter the 6-digit unlock code."); return; }
+    setUnlockLoading(true);
+    setUnlockError("");
+    try {
+      const res = await fetch(
+        `/api/unlock-code?ip=${encodeURIComponent(lastUnauthorisedIp)}&username=${encodeURIComponent(username.trim())}&code=${encodeURIComponent(unlockCode)}`
+      );
+      const data = await res.json();
+      if (data.valid) {
+        setLoginLocked(false);
+        setCodeSent(false);
+        setUnlockCode("");
+        setUnlockError("");
+        setFormError("✅ Login re-enabled. You may now sign in.");
+      } else {
+        setUnlockError("Invalid or expired code. Please check the email.");
+      }
+    } catch {
+      setUnlockError("Failed to verify code. Please try again.");
+    } finally {
+      setUnlockLoading(false);
+    }
+  }
+
   function GpsBadge() {
     if (!gpsEnabled) return null;
 
@@ -305,6 +349,40 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {loginLocked && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🔒</span>
+                    <p className="text-sm font-bold text-amber-800">Login Disabled</p>
+                  </div>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    Login has been disabled due to an unauthorised IP attempt. An unlock code has been sent to the administrator. Enter it below to re-enable login.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={unlockCode}
+                      onChange={(e) => { setUnlockCode(e.target.value.replace(/\D/g, "")); setUnlockError(""); }}
+                      placeholder="6-digit code"
+                      className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-center tracking-widest font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUnlock}
+                      disabled={unlockLoading}
+                      className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {unlockLoading ? "..." : "UNLOCK"}
+                    </button>
+                  </div>
+                  {unlockError && (
+                    <p className="text-xs text-red-600 font-medium">{unlockError}</p>
+                  )}
+                </div>
+              )}
+
               {/* Username */}
               <div className="space-y-1.5">
                 <label htmlFor="login-username" className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Username</label>
@@ -355,7 +433,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading || gpsBlocking}
+                disabled={loading || gpsBlocking || loginLocked}
                 className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)" }}
               >
