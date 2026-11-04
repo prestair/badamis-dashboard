@@ -965,6 +965,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                   discountPercentA: Math.max(0, Number(discountPercentA) || 0),
                   partBEnabled,
                   discountPercentB: partBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0,
+                  gstEnabled,
                 }}
                 afterDiscount={combinedAfterDiscount}
                 gst={gst}
@@ -1867,6 +1868,7 @@ export default function QuotationModal({ onClose, initialData, resumeDraft = fal
                   discountPercentA: Math.max(0, Number(discountPercentA) || 0),
                   partBEnabled,
                   discountPercentB: partBEnabled ? Math.max(0, Number(discountPercentB) || 0) : 0,
+                  gstEnabled,
                 }}
                 afterDiscount={combinedAfterDiscount}
                 gst={gst}
