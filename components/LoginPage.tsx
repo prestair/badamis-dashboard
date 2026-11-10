@@ -202,16 +202,29 @@ export default function LoginPage() {
     setUnlockLoading(true);
     setUnlockError("");
     try {
+      // If lastUnauthorisedIp is empty (e.g. after page reload), re-fetch current IP
+      let ip = lastUnauthorisedIp;
+      if (!ip) {
+        try {
+          const ipCheck = await fetch(
+            `/api/check-ip?username=${encodeURIComponent(username.trim())}`,
+            { cache: "no-store" }
+          );
+          if (ipCheck.ok) {
+            const ipResult = await ipCheck.json();
+            ip = ipResult.ip ?? "";
+            setLastUnauthorisedIp(ip);
+          }
+        } catch { /* ignore */ }
+      }
+
       const res = await fetch(
-        `/api/unlock-code?ip=${encodeURIComponent(lastUnauthorisedIp)}&username=${encodeURIComponent(username.trim())}&code=${encodeURIComponent(unlockCode)}`
+        `/api/unlock-code?ip=${encodeURIComponent(ip)}&username=${encodeURIComponent(username.trim())}&code=${encodeURIComponent(unlockCode)}`
       );
       const data = await res.json();
       if (data.valid) {
-        setLoginLocked(false);
-        setCodeSent(false);
-        setUnlockCode("");
-        setUnlockError("");
-        setFormError("✅ Login re-enabled. You may now sign in.");
+        // Hard refresh — clears all lock state and lets user login fresh
+        window.location.reload();
       } else {
         setUnlockError("Invalid or expired code. Please check the email.");
       }
@@ -359,9 +372,18 @@ export default function LoginPage() {
 
               {loginLocked && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🔒</span>
-                    <p className="text-sm font-bold text-amber-800">Login Disabled</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🔒</span>
+                      <p className="text-sm font-bold text-amber-800">Login Disabled</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="text-xs text-amber-600 underline hover:text-amber-800"
+                    >
+                      Refresh Page
+                    </button>
                   </div>
                   <p className="text-xs text-amber-700 leading-relaxed">
                     Login has been disabled due to an unauthorised IP attempt. An unlock code has been sent to the administrator. Enter it below to re-enable login.
