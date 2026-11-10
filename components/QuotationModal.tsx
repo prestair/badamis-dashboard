@@ -303,7 +303,7 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
 export default function QuotationModal({ onClose, initialData, resumeDraft = false }: Props) {
   const { saveQuotationFull, updateQuotation, quotations } = useQuotations();
   const { loggedUser, loggedRole, users, masterActorName } = useAuth();
-  const actorName = (loggedUser === "master" && masterActorName)
+  const actorName = (loggedUser.toLowerCase() === "master" && masterActorName)
     ? masterActorName
     : users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
   const isEdit = !!initialData?.dbId;

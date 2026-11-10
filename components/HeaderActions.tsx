@@ -315,7 +315,7 @@ export default function HeaderActions() {
       const today = new Date().toISOString().split("T")[0];
       const finalUser = result.userName || "Unknown";
       const finalPartyName = result.partyName || "Unknown";
-      const resolvedUser = (loggedUser === "master" && masterActorName) ? masterActorName : finalUser;
+      const resolvedUser = (loggedUser.toLowerCase() === "master" && masterActorName) ? masterActorName : finalUser;
       const qNo = generateNextQuotationNo(resolvedUser, result.requester || "");
       const discount = result.discounts.seasonal.amount + result.discounts.special.amount;
 

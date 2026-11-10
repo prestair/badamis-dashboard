@@ -8,10 +8,11 @@ export default function MasterUserSelector() {
   const [selected, setSelected] = useState("");
 
   // Only show for master user when no actor is selected yet
-  if (loggedUser !== "master" || masterActorName !== "") return null;
+  const isMaster = loggedUser.toLowerCase() === "master";
+  if (!isMaster || masterActorName !== "") return null;
 
   const options = users.filter(
-    (u) => u.active && u.username !== "master"
+    (u) => u.active && u.username.toLowerCase() !== "master"
   );
 
   function handleConfirm() {
