@@ -201,11 +201,8 @@ export default function LoginPage() {
       );
       const data = await res.json();
       if (data.valid) {
-        setLoginLocked(false);
-        setCodeSent(false);
-        setUnlockCode("");
-        setUnlockError("");
-        setFormError("✅ Login re-enabled. You may now sign in.");
+        // hard refresh — clears all state and lets user login fresh
+        window.location.reload();
       } else {
         setUnlockError("Invalid or expired code. Please check the email.");
       }
