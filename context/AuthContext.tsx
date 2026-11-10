@@ -49,6 +49,8 @@ type AuthContextValue = {
   setUserPermission:   (username: string, perm: "canEditCompleted" | "canEditDailyReport", value: boolean) => Promise<{ ok: boolean; error?: string }>;
   masterActorName: string;
   setMasterActorName: (name: string) => void;
+  masterOtpPending: boolean;
+  setMasterOtpPending: (v: boolean) => void;
 };
 
 // ── Default users ─────────────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loggedRole, setLoggedRole] = useState<UserRole | null>(null);
   const [loggedPerms, setLoggedPerms] = useState<LoggedUserPerms>(DEFAULT_PERMS);
   const [masterActorName, setMasterActorName] = useState<string>("");
+  const [masterOtpPending, setMasterOtpPending] = useState<boolean>(false);
 
   // Restore login session from sessionStorage on mount
   useEffect(() => {
@@ -215,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoggedRole(null);
     setLoggedPerms(DEFAULT_PERMS);
     setMasterActorName("");
+    setMasterOtpPending(false);
     try { sessionStorage.removeItem("prestair-session"); } catch { /* */ }
   }
 
@@ -387,6 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login, logout, changePassword,
       createUser, deleteUser, adminChangePassword, editUserName, setUserActive, setUserPermission,
       masterActorName, setMasterActorName,
+      masterOtpPending, setMasterOtpPending,
     }}>
       {children}
     </AuthContext.Provider>

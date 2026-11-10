@@ -59,7 +59,7 @@ async function getCityName(lat: number, lng: number): Promise<string> {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const { login, logout } = useAuth();
+  const { login, logout, masterOtpPending, setMasterOtpPending } = useAuth();
 
   const [username, setUsername]         = useState("");
   const [password, setPassword]         = useState("");
@@ -68,7 +68,6 @@ export default function LoginPage() {
   const [loading, setLoading]           = useState(false);
 
   // Master OTP 2FA state
-  const [masterOtpPending, setMasterOtpPending] = useState(false);
   const [masterOtp, setMasterOtp]               = useState("");
   const [masterOtpError, setMasterOtpError]     = useState("");
   const [masterOtpLoading, setMasterOtpLoading] = useState(false);
