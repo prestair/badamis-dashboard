@@ -302,8 +302,10 @@ function initItemRows(initial?: SavedQuotation | null): ItemRow[] {
 
 export default function QuotationModal({ onClose, initialData, resumeDraft = false }: Props) {
   const { saveQuotationFull, updateQuotation, quotations } = useQuotations();
-  const { loggedUser, loggedRole, users } = useAuth();
-  const actorName = users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
+  const { loggedUser, loggedRole, users, masterActorName } = useAuth();
+  const actorName = (loggedUser === "master" && masterActorName)
+    ? masterActorName
+    : users.find((user) => user.username === loggedUser)?.fullName || loggedUser || "Unknown";
   const isEdit = !!initialData?.dbId;
   const canEditQuotationNumber = loggedRole === "admin";
   const initialLegacyDiscount = initialData?.discounts.legacyAmount ?? 0;

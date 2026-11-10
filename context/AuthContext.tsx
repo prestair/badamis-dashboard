@@ -47,6 +47,8 @@ type AuthContextValue = {
   editUserName:        (username: string, newFullName: string) => Promise<{ ok: boolean; error?: string }>;
   setUserActive:       (username: string, active: boolean) => Promise<{ ok: boolean; error?: string }>;
   setUserPermission:   (username: string, perm: "canEditCompleted" | "canEditDailyReport", value: boolean) => Promise<{ ok: boolean; error?: string }>;
+  masterActorName: string;
+  setMasterActorName: (name: string) => void;
 };
 
 // ── Default users ─────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loggedUser, setLoggedUser] = useState("");
   const [loggedRole, setLoggedRole] = useState<UserRole | null>(null);
   const [loggedPerms, setLoggedPerms] = useState<LoggedUserPerms>(DEFAULT_PERMS);
+  const [masterActorName, setMasterActorName] = useState<string>("");
 
   // Restore login session from sessionStorage on mount
   useEffect(() => {
@@ -211,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoggedUser("");
     setLoggedRole(null);
     setLoggedPerms(DEFAULT_PERMS);
+    setMasterActorName("");
     try { sessionStorage.removeItem("prestair-session"); } catch { /* */ }
   }
 
@@ -382,6 +386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoggedIn, loggedUser, loggedRole, loggedPerms, users,
       login, logout, changePassword,
       createUser, deleteUser, adminChangePassword, editUserName, setUserActive, setUserPermission,
+      masterActorName, setMasterActorName,
     }}>
       {children}
     </AuthContext.Provider>

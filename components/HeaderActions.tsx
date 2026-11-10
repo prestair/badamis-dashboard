@@ -17,7 +17,7 @@ type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
 
 export default function HeaderActions() {
-  const { loggedRole, loggedUser } = useAuth();
+  const { loggedRole, loggedUser, users, masterActorName } = useAuth();
 
   // Format stored YYYY-MM-DD to DD/MM/YYYY
   function fmtDate(dateStr: string): string {
@@ -314,7 +314,8 @@ export default function HeaderActions() {
       const today = new Date().toISOString().split("T")[0];
       const finalUser = result.userName || "Unknown";
       const finalPartyName = result.partyName || "Unknown";
-      const qNo = generateNextQuotationNo(finalUser, result.requester || "");
+      const resolvedUser = (loggedUser === "master" && masterActorName) ? masterActorName : finalUser;
+      const qNo = generateNextQuotationNo(resolvedUser, result.requester || "");
       const discount = result.discounts.seasonal.amount + result.discounts.special.amount;
 
       await saveQuotation({
@@ -334,7 +335,7 @@ export default function HeaderActions() {
         afterDiscount: result.afterDiscount,
         gst: result.gst,
         grandTotal: result.grandTotal,
-      }, finalUser);
+      }, resolvedUser);
 
       setShowImportModal(false);
       setImportFile(null);
