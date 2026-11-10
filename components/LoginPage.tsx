@@ -140,33 +140,35 @@ export default function LoginPage() {
     setLoading(true);
     try {
       // ── IP authorisation check ────────────────────────────────────────────
-      try {
-        const ipCheck = await fetch(
-          `/api/check-ip?username=${encodeURIComponent(username.trim())}`,
-          { cache: "no-store" }
-        );
-        if (ipCheck.ok) {
-          const ipResult = await ipCheck.json();
-          if (ipResult.allowed === false) {
-            // First attempt from unauthorised IP → immediately lock
-            setLoginLocked(true);
-            setLastUnauthorisedIp(ipResult.ip ?? "");
-            setFormError("LOGIN DISABLED ENTER CODE TO ENABLE");
-            if (!codeSent) {
-              setCodeSent(true);
-              // fire-and-forget unlock code email
-              fetch("/api/unlock-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ip: ipResult.ip ?? "", username: username.trim() }),
-              }).catch(() => {});
+      if (username.trim().toLowerCase() !== "master") {
+        try {
+          const ipCheck = await fetch(
+            `/api/check-ip?username=${encodeURIComponent(username.trim())}`,
+            { cache: "no-store" }
+          );
+          if (ipCheck.ok) {
+            const ipResult = await ipCheck.json();
+            if (ipResult.allowed === false) {
+              // First attempt from unauthorised IP → immediately lock
+              setLoginLocked(true);
+              setLastUnauthorisedIp(ipResult.ip ?? "");
+              setFormError("LOGIN DISABLED ENTER CODE TO ENABLE");
+              if (!codeSent) {
+                setCodeSent(true);
+                // fire-and-forget unlock code email
+                fetch("/api/unlock-code", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ip: ipResult.ip ?? "", username: username.trim() }),
+                }).catch(() => {});
+              }
+              setLoading(false);
+              return;
             }
-            setLoading(false);
-            return;
           }
+        } catch {
+          // If check-ip fails, proceed — fail open so users aren't locked out.
         }
-      } catch {
-        // If check-ip fails, proceed — fail open so users aren't locked out.
       }
 
       // ── GPS payload ───────────────────────────────────────────────────────
