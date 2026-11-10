@@ -59,13 +59,19 @@ async function getCityName(lat: number, lng: number): Promise<string> {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
 
   const [username, setUsername]         = useState("");
   const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError]       = useState("");
   const [loading, setLoading]           = useState(false);
+
+  // Master OTP 2FA state
+  const [masterOtpPending, setMasterOtpPending] = useState(false);
+  const [masterOtp, setMasterOtp]               = useState("");
+  const [masterOtpError, setMasterOtpError]     = useState("");
+  const [masterOtpLoading, setMasterOtpLoading] = useState(false);
 
   const [loginLocked, setLoginLocked]               = useState(false);
   const [unlockCode, setUnlockCode]                 = useState("");
@@ -149,13 +155,12 @@ export default function LoginPage() {
           if (ipCheck.ok) {
             const ipResult = await ipCheck.json();
             if (ipResult.allowed === false) {
-              // First attempt from unauthorised IP → immediately lock
+              // Unauthorised IP → lock
               setLoginLocked(true);
               setLastUnauthorisedIp(ipResult.ip ?? "");
               setFormError("LOGIN DISABLED ENTER CODE TO ENABLE");
               if (!codeSent) {
                 setCodeSent(true);
-                // fire-and-forget unlock code email
                 fetch("/api/unlock-code", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -165,11 +170,12 @@ export default function LoginPage() {
               setLoading(false);
               return;
             } else {
-              // IP is authorised — clear any stale lockout state
+              // IP is authorised — clear any stale lockout state and proceed
               setLoginLocked(false);
               setCodeSent(false);
               setUnlockCode("");
               setUnlockError("");
+              setFormError("");
             }
           }
         } catch {
@@ -187,6 +193,14 @@ export default function LoginPage() {
           : {};
 
       const ok = await login(username, password, gpsPayload);
+      if (ok && username.trim().toLowerCase() === "master") {
+        // Undo the login — don't grant session yet, wait for OTP
+        logout();
+        // Fire OTP email (fire-and-forget is fine; errors logged server-side)
+        await fetch("/api/master-otp", { method: "POST" });
+        setMasterOtpPending(true);
+        return;
+      }
       if (!ok) {
         setFormError("Invalid username or password.");
         setPassword("");
@@ -197,6 +211,39 @@ export default function LoginPage() {
   }
 
   // ── GPS badge (shown below toggle area) ──────────────────────────────────
+  async function handleMasterOtpSubmit() {
+    if (masterOtp.length !== 4) { setMasterOtpError("Enter the 4-digit code."); return; }
+    setMasterOtpLoading(true);
+    setMasterOtpError("");
+    try {
+      const res = await fetch("/api/master-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: masterOtp }),
+      });
+      const data = await res.json() as { valid: boolean };
+      if (data.valid) {
+        // Now actually log in — GPS payload re-assembled from current gps state
+        const currentGps = gps;
+        const gpsPayload =
+          currentGps.status === "granted"
+            ? { latitude: currentGps.lat, longitude: currentGps.lng, gpsAccuracy: currentGps.accuracy, city: currentGps.city }
+            : currentGps.status === "unavailable"
+            ? { gpsError: "Geolocation API not available" }
+            : {};
+        await login("master", password, gpsPayload);
+        setPassword("");
+        // Dashboard will show automatically once isLoggedIn becomes true
+      } else {
+        setMasterOtpError("Incorrect code. Please check your email.");
+      }
+    } catch {
+      setMasterOtpError("Failed to verify. Please try again.");
+    } finally {
+      setMasterOtpLoading(false);
+    }
+  }
+
   async function handleUnlock() {
     if (unlockCode.length !== 6) { setUnlockError("Enter the 6-digit unlock code."); return; }
     setUnlockLoading(true);
@@ -352,142 +399,188 @@ export default function LoginPage() {
               <div className="hidden lg:block mb-4">
                 <img src="/logos/logo2-1.png" alt="Prestair Systems LLP" className="h-12 w-auto" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
-              <p className="text-slate-500 text-sm">Sign in to access your Quotation Dashboard</p>
+              {!masterOtpPending && (
+                <>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
+                  <p className="text-slate-500 text-sm">Sign in to access your Quotation Dashboard</p>
+                </>
+              )}
             </div>
 
             {/* GPS badge */}
             <GpsBadge />
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              {formError && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  {formError}
+            {masterOtpPending ? (
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Verify Identity</h2>
+                  <p className="text-slate-500 text-sm">A 4-digit code has been sent to the administrator&apos;s email. Enter it below to continue.</p>
                 </div>
-              )}
-
-              {loginLocked && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">🔒</span>
-                      <p className="text-sm font-bold text-amber-800">Login Disabled</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => window.location.reload()}
-                      className="text-xs text-amber-600 underline hover:text-amber-800"
-                    >
-                      Refresh Page
-                    </button>
-                  </div>
-                  <p className="text-xs text-amber-700 leading-relaxed">
-                    Login has been disabled due to an unauthorised IP attempt. An unlock code has been sent to the administrator. Enter it below to re-enable login.
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={unlockCode}
-                      onChange={(e) => { setUnlockCode(e.target.value.replace(/\D/g, "")); setUnlockError(""); }}
-                      placeholder="6-digit code"
-                      className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-center tracking-widest font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleUnlock}
-                      disabled={unlockLoading}
-                      className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {unlockLoading ? "..." : "UNLOCK"}
-                    </button>
-                  </div>
-                  {unlockError && (
-                    <p className="text-xs text-red-600 font-medium">{unlockError}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Username */}
-              <div className="space-y-1.5">
-                <label htmlFor="login-username" className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Username</label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  </div>
-                  <input
-                    ref={usernameRef}
-                    id="login-username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => { setUsername(e.target.value); setFormError(""); }}
-                    placeholder="Enter your username"
-                    autoComplete="username"
-                    className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div className="space-y-1.5">
-                <label htmlFor="login-password" className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                  </div>
-                  <input
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setFormError(""); }}
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    className="w-full border border-slate-200 rounded-xl pl-10 pr-11 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
-                  />
-                  <button type="button" onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                    aria-label={showPassword ? "Hide password" : "Show password"}>
-                    {showPassword ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || gpsBlocking || loginLocked}
-                className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)" }}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                {masterOtpError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
-                    Signing in...
-                  </span>
-                ) : "Sign In"}
-              </button>
-            </form>
-
-            {/* Certifications */}
-            <div className="pt-4 border-t border-slate-200">
-              <p className="text-center text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-3">Certified &amp; Accredited</p>
-              <div className="flex items-center justify-center gap-3 opacity-60">
-                {["ISO 9001", "CE", "IAF", "UAF", "GACB"].map((cert) => (
-                  <span key={cert} className="px-2 py-1 rounded bg-slate-100 text-[9px] font-bold text-slate-500 border border-slate-200">{cert}</span>
-                ))}
+                    {masterOtpError}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">4-Digit Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={masterOtp}
+                    onChange={(e) => { setMasterOtp(e.target.value.replace(/\D/g, "")); setMasterOtpError(""); }}
+                    placeholder="Enter code"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-widest font-mono text-lg shadow-sm"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") handleMasterOtpSubmit(); }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMasterOtpSubmit}
+                  disabled={masterOtpLoading || masterOtp.length !== 4}
+                  className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                  style={{background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)"}}
+                >
+                  {masterOtpLoading ? "Verifying..." : "Verify & Continue"}
+                </button>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Form */}
+                <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                  {formError && (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      {formError}
+                    </div>
+                  )}
+
+                  {loginLocked && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🔒</span>
+                          <p className="text-sm font-bold text-amber-800">Login Disabled</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="text-xs text-amber-600 underline hover:text-amber-800"
+                        >
+                          Refresh Page
+                        </button>
+                      </div>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        Login has been disabled due to an unauthorised IP attempt. An unlock code has been sent to the administrator. Enter it below to re-enable login.
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={unlockCode}
+                          onChange={(e) => { setUnlockCode(e.target.value.replace(/\D/g, "")); setUnlockError(""); }}
+                          placeholder="6-digit code"
+                          className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-center tracking-widest font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleUnlock}
+                          disabled={unlockLoading}
+                          className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {unlockLoading ? "..." : "UNLOCK"}
+                        </button>
+                      </div>
+                      {unlockError && (
+                        <p className="text-xs text-red-600 font-medium">{unlockError}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Username */}
+                  <div className="space-y-1.5">
+                    <label htmlFor="login-username" className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Username</label>
+                    <div className="relative">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      </div>
+                      <input
+                        ref={usernameRef}
+                        id="login-username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => { setUsername(e.target.value); setFormError(""); }}
+                        placeholder="Enter your username"
+                        autoComplete="username"
+                        className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="space-y-1.5">
+                    <label htmlFor="login-password" className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
+                    <div className="relative">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
+                      <input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => { setPassword(e.target.value); setFormError(""); }}
+                        placeholder="Enter your password"
+                        autoComplete="current-password"
+                        className="w-full border border-slate-200 rounded-xl pl-10 pr-11 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                      />
+                      <button type="button" onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        aria-label={showPassword ? "Hide password" : "Show password"}>
+                        {showPassword ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || gpsBlocking || loginLocked}
+                    className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)"}}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        Signing in...
+                      </span>
+                    ) : "Sign In"}
+                  </button>
+                </form>
+
+                {/* Certifications */}
+                <div className="pt-4 border-t border-slate-200">
+                  <p className="text-center text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-3">Certified &amp; Accredited</p>
+                  <div className="flex items-center justify-center gap-3 opacity-60">
+                    {["ISO 9001", "CE", "IAF", "UAF", "GACB"].map((cert) => (
+                      <span key={cert} className="px-2 py-1 rounded bg-slate-100 text-[9px] font-bold text-slate-500 border border-slate-200">{cert}</span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
