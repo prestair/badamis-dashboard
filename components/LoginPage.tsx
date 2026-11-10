@@ -164,6 +164,12 @@ export default function LoginPage() {
               }
               setLoading(false);
               return;
+            } else {
+              // IP is authorised — clear any stale lockout state
+              setLoginLocked(false);
+              setCodeSent(false);
+              setUnlockCode("");
+              setUnlockError("");
             }
           }
         } catch {
