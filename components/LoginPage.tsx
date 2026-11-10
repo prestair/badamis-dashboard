@@ -221,7 +221,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: masterOtp }),
       });
-      const data = await res.json() as { valid: boolean };
+      const data = await res.json() as { valid: boolean; newCodeSent?: boolean; attemptsLeft?: number };
       if (data.valid) {
         // Now actually log in — GPS payload re-assembled from current gps state
         const currentGps = gps;
@@ -234,8 +234,13 @@ export default function LoginPage() {
         await login("master", password, gpsPayload);
         setPassword("");
         // Dashboard will show automatically once isLoggedIn becomes true
+      } else if (data.newCodeSent) {
+        // 5 failed attempts — new code automatically sent
+        setMasterOtp("");
+        setMasterOtpError("5 failed attempts. A new code has been sent to the administrator's email.");
       } else {
-        setMasterOtpError("Incorrect code. Please check your email.");
+        const left = data.attemptsLeft;
+        setMasterOtpError(`Incorrect code. Please check your email.${left !== undefined ? ` (${left} attempt${left === 1 ? "" : "s"} left)` : ""}`);
       }
     } catch {
       setMasterOtpError("Failed to verify. Please try again.");
