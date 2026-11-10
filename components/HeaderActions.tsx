@@ -12,6 +12,7 @@ const ItemNameManager    = dynamic(() => import("@/components/ItemNameManager"),
 const RequesterManager   = dynamic(() => import("@/components/RequesterManager"),   { ssr: false });
 const HsnManager         = dynamic(() => import("@/components/HsnManager"),         { ssr: false });
 const AuthorisedIpManager = dynamic(() => import("@/components/AuthorisedIpManager"), { ssr: false });
+const MasterUserSelector = dynamic(() => import("@/components/MasterUserSelector"), { ssr: false });
 
 type PageSize = 10 | 20 | 50 | 100;
 const DEFAULT_PAGE_SIZE: PageSize = 20;
@@ -349,6 +350,7 @@ export default function HeaderActions() {
 
   return (
     <>
+      <MasterUserSelector />
       {/* ── ROW 2: Action buttons ── */}
       <div className="flex flex-wrap items-center justify-center gap-3 py-3 border-b border-slate-200">
         {/* Total */}

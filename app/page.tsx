@@ -5,8 +5,6 @@ import HeaderActions from "@/components/HeaderActions";
 import UserBar from "@/components/UserBar";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import PrestairLogo, { PRESTAIR_ADDRESS } from "@/components/PrestairLogo";
-import dynamic from "next/dynamic";
-const MasterUserSelector = dynamic(() => import("@/components/MasterUserSelector"), { ssr: false });
 
 const TERMS = [
   { icon: "✅", label: "Rate validity", value: "10 days" },
@@ -22,7 +20,6 @@ const TERMS = [
 export default function DashboardPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <MasterUserSelector />
 
       {/* ── HEADER ── */}
       <header className="bg-gradient-to-r from-white to-slate-100 text-slate-800 shadow-sm border-b border-slate-200">
