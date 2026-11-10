@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoggedRole(null);
     setLoggedPerms(DEFAULT_PERMS);
     setMasterActorName("");
-    setMasterOtpPending(false);
+    // Note: masterOtpPending is NOT reset here — it's managed separately in LoginPage
     try { sessionStorage.removeItem("prestair-session"); } catch { /* */ }
   }
 

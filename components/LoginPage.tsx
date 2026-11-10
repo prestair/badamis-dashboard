@@ -193,11 +193,12 @@ export default function LoginPage() {
 
       const ok = await login(username, password, gpsPayload);
       if (ok && username.trim().toLowerCase() === "master") {
+        // Set OTP pending BEFORE logout so logout doesn't clear it
+        setMasterOtpPending(true);
         // Undo the login — don't grant session yet, wait for OTP
         logout();
-        // Fire OTP email (fire-and-forget is fine; errors logged server-side)
+        // Fire OTP email
         await fetch("/api/master-otp", { method: "POST" });
-        setMasterOtpPending(true);
         return;
       }
       if (!ok) {
@@ -231,6 +232,7 @@ export default function LoginPage() {
             ? { gpsError: "Geolocation API not available" }
             : {};
         await login("master", password, gpsPayload);
+        setMasterOtpPending(false);
         setPassword("");
         // Dashboard will show automatically once isLoggedIn becomes true
       } else if (data.newCodeSent) {
