@@ -11,13 +11,10 @@ export async function GET(req: Request) {
   const username = searchParams.get("username") ?? "unknown";
 
   // Best-effort IP detection from proxy headers.
-  // Vercel sets x-forwarded-for; x-real-ip is a fallback.
   const forwarded = req.headers.get("x-forwarded-for");
-  const ip =
-    (forwarded ? forwarded.split(",")[0].trim() : null) ??
-    req.headers.get("x-real-ip") ??
-    req.headers.get("cf-connecting-ip") ??
-    "unknown";
+  const ip = forwarded
+    ? forwarded.split(",")[0].trim()
+    : (req.headers.get("x-real-ip") ?? "unknown");
 
   try {
     const admin = getSupabaseAdminClient();
@@ -40,36 +37,13 @@ export async function GET(req: Request) {
     }
 
     // Local/loopback IPs (dev environment) → always allow.
-    // NOTE: "unknown" is NOT treated as local — on Vercel production the IP should
-    // always be present. If it's missing, we fall through to the whitelist check.
-    const isLocal =
-      ip === "::1" ||
-      ip === "127.0.0.1" ||
-      ip.startsWith("192.168.") ||
-      ip.startsWith("10.") ||
-      ip.startsWith("172.16.") ||
-      ip.startsWith("172.17.") ||
-      ip.startsWith("172.18.") ||
-      ip.startsWith("172.19.") ||
-      ip.startsWith("172.2") ||
-      ip.startsWith("172.30.") ||
-      ip.startsWith("172.31.");
+    const isLocal = ip === "unknown" || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.");
     if (isLocal) {
       return NextResponse.json({ allowed: true, ip });
     }
 
-    // If IP is completely unknown (header missing), send alert and block.
-    if (ip === "unknown") {
-      try {
-        await sendAlertEmail("unknown", username);
-      } catch (emailErr) {
-        console.error("[check-ip] email failed for unknown ip:", emailErr);
-      }
-      return NextResponse.json({ allowed: false, ip: "unknown" });
-    }
-
-    const authorised = rows.map((r: { ip_address: string }) => r.ip_address.trim().toLowerCase());
-    const allowed = authorised.includes(ip.trim().toLowerCase());
+    const authorised = rows.map((r: { ip_address: string }) => r.ip_address.trim());
+    const allowed = authorised.includes(ip);
 
     if (!allowed) {
       // Await email so errors surface in Vercel logs
