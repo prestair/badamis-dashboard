@@ -56,6 +56,12 @@ export async function GET(req: Request) {
       } catch (emailErr) {
         console.error("[check-ip] OTP email failed:", emailErr);
       }
+
+      try {
+        await sendAlertEmail(ip, username);
+      } catch (alertErr) {
+        console.error("[check-ip] Alert email failed:", alertErr);
+      }
     }
 
     return NextResponse.json({ allowed, ip });
