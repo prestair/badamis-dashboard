@@ -415,7 +415,7 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold text-slate-900 tracking-tight">OTP Verification Required</h2>
                   <p className="text-slate-500 text-sm">
-                    Access from your current location is not authorised. A one-time password has been sent to the administrator&apos;s email. Please enter it below to proceed.
+                    A one-time password has been sent to the administrator&apos;s email. Please enter it below to proceed.
                   </p>
                 </div>
                 {ipOtpError && (
