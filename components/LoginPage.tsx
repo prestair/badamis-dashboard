@@ -413,11 +413,9 @@ export default function LoginPage() {
               /* ── Unauthorised IP OTP screen ── */
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">OTP Verification</h2>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">OTP Verification Required</h2>
                   <p className="text-slate-500 text-sm">
-                    Aapka IP address authorised nahi hai. Ek 6-digit OTP{" "}
-                    <span className="font-semibold text-slate-700">agm.prestairsystem@gmail.com</span>{" "}
-                    par bheja gaya hai. OTP enter karein aur dashboard access karein.
+                    Access from your current location is not authorised. A one-time password has been sent to the administrator&apos;s email. Please enter it below to proceed.
                   </p>
                 </div>
                 {ipOtpError && (
@@ -436,7 +434,7 @@ export default function LoginPage() {
                     maxLength={6}
                     value={ipOtpCode}
                     onChange={(e) => { setIpOtpCode(e.target.value.replace(/\D/g, "")); setIpOtpError(""); }}
-                    placeholder="OTP enter karein"
+                    placeholder="Enter OTP"
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-widest font-mono text-lg shadow-sm"
                     autoFocus
                     onKeyDown={(e) => { if (e.key === "Enter") handleIpOtpSubmit(); }}
@@ -449,14 +447,14 @@ export default function LoginPage() {
                   className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                   style={{background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)"}}
                 >
-                  {ipOtpLoading ? "Verifying..." : "Verify & Login"}
+                  {ipOtpLoading ? "Verifying..." : "Verify & Sign In"}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setIpOtpPending(false); setIpOtpCode(""); setIpOtpError(""); }}
                   className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 underline"
                 >
-                  Wapas jaiye
+                  Back to Login
                 </button>
               </div>
 

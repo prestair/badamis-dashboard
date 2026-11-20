@@ -47,20 +47,19 @@ export async function GET(req: Request) {
     const allowed = authorised.includes(ip);
 
     if (!allowed) {
-      // Generate OTP and send to admin
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       ipOtpStore.set(`${ip}:${username}`, { code, createdAt: new Date() });
+
+      try {
+        await sendAlertEmail(ip, username);
+      } catch (alertErr) {
+        console.error("[check-ip] alert email failed:", alertErr);
+      }
 
       try {
         await sendOtpEmail(ip, username, code);
       } catch (emailErr) {
         console.error("[check-ip] OTP email failed:", emailErr);
-      }
-
-      try {
-        await sendAlertEmail(ip, username);
-      } catch (alertErr) {
-        console.error("[check-ip] Alert email failed:", alertErr);
       }
     }
 
@@ -101,8 +100,8 @@ export async function POST(req: Request) {
   }
 }
 
-// ── Email helper ──────────────────────────────────────────────────────────────
-async function sendOtpEmail(ip: string, username: string, code: string) {
+// ── Email helper — sends warning + OTP in one email ──────────────────────────
+async function sendEmail(ip: string, username: string, code: string) {
   const gmailUser = process.env.GMAIL_USER;
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const adminTo   = "agm.prestairsystem@gmail.com";
@@ -125,21 +124,40 @@ async function sendOtpEmail(ip: string, username: string, code: string) {
   await transporter.sendMail({
     from: `"Prestair Security" <${gmailUser}>`,
     to: adminTo,
-    subject: `🔑 Login OTP for ${username} from unauthorised IP ${ip}`,
+    subject: `⚠️ Unauthorised Login Attempt — OTP for ${username}`,
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
-        <h2 style="color:#1e3a5f;">🔑 Login OTP</h2>
-        <p style="color:#374151;font-size:14px;">A login attempt was made from an unrecognised IP. Enter the OTP below to allow access.</p>
-        <table style="border-collapse:collapse;font-size:14px;width:100%;margin-top:16px;">
-          <tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#374151;">IP Address</td><td style="padding:8px 12px;">${ip}</td></tr>
-          <tr><td style="padding:8px 12px;font-weight:bold;color:#374151;">Username</td><td style="padding:8px 12px;">${username}</td></tr>
-          <tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#374151;">Time (IST)</td><td style="padding:8px 12px;">${now}</td></tr>
-        </table>
-        <div style="margin:24px 0;text-align:center;padding:20px;background:#eff6ff;border-radius:12px;border:2px solid #3b82f6;">
-          <p style="margin:0 0 8px;font-size:13px;color:#1e40af;font-weight:bold;">OTP CODE</p>
-          <p style="margin:0;font-size:42px;font-weight:900;color:#1e3a5f;letter-spacing:8px;font-family:monospace;">${code}</p>
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">
+
+        <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:16px 20px;border-radius:8px;margin-bottom:20px;">
+          <h2 style="margin:0 0 6px;color:#dc2626;font-size:18px;">⚠️ Unauthorised Login Attempt Detected</h2>
+          <p style="margin:0;color:#374151;font-size:14px;">A login attempt was made from an IP address that is not on the authorised list.</p>
         </div>
-        <p style="color:#6b7280;font-size:12px;">This code expires in 10 minutes. Share it with the user only if this login attempt is legitimate.</p>
+
+        <table style="border-collapse:collapse;font-size:14px;width:100%;margin-bottom:20px;">
+          <tr style="background:#f8fafc;">
+            <td style="padding:10px 14px;font-weight:bold;color:#374151;border:1px solid #e2e8f0;width:40%;">IP Address</td>
+            <td style="padding:10px 14px;border:1px solid #e2e8f0;">${ip}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px;font-weight:bold;color:#374151;border:1px solid #e2e8f0;">Username</td>
+            <td style="padding:10px 14px;border:1px solid #e2e8f0;">${username}</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="padding:10px 14px;font-weight:bold;color:#374151;border:1px solid #e2e8f0;">Time (IST)</td>
+            <td style="padding:10px 14px;border:1px solid #e2e8f0;">${now}</td>
+          </tr>
+        </table>
+
+        <div style="text-align:center;padding:24px 20px;background:#eff6ff;border-radius:12px;border:2px solid #3b82f6;margin-bottom:16px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#1e40af;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">One-Time Password (OTP)</p>
+          <p style="margin:0;font-size:48px;font-weight:900;color:#1e3a5f;letter-spacing:10px;font-family:monospace;">${code}</p>
+          <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">Valid for 10 minutes</p>
+        </div>
+
+        <p style="color:#6b7280;font-size:12px;line-height:1.6;">
+          Share this OTP with the user only if this login attempt is legitimate. If you do not recognise this attempt, please review your authorised IP list immediately.
+        </p>
+
       </div>
     `,
   });
