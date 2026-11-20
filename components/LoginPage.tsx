@@ -43,7 +43,6 @@ async function getCityName(lat: number, lng: number): Promise<string> {
     if (!res.ok) return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     const data = await res.json();
     const a = data.address ?? {};
-    // Pick most meaningful available label
     const city =
       a.city || a.town || a.village || a.county || a.state_district || a.state || "";
     const state = a.state || "";
@@ -72,12 +71,12 @@ export default function LoginPage() {
   const [masterOtpError, setMasterOtpError]     = useState("");
   const [masterOtpLoading, setMasterOtpLoading] = useState(false);
 
-  const [loginLocked, setLoginLocked]               = useState(false);
-  const [unlockCode, setUnlockCode]                 = useState("");
-  const [unlockError, setUnlockError]               = useState("");
-  const [unlockLoading, setUnlockLoading]           = useState(false);
-  const [lastUnauthorisedIp, setLastUnauthorisedIp] = useState("");
-  const [codeSent, setCodeSent]                     = useState(false);
+  // Unauthorised IP — OTP state
+  const [ipOtpPending, setIpOtpPending]     = useState(false);
+  const [ipOtpCode, setIpOtpCode]           = useState("");
+  const [ipOtpError, setIpOtpError]         = useState("");
+  const [ipOtpLoading, setIpOtpLoading]     = useState(false);
+  const [pendingIp, setPendingIp]           = useState("");
 
   // GPS toggle — default ON
   const [gpsEnabled, setGpsEnabled] = useState(true);
@@ -95,8 +94,6 @@ export default function LoginPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-        // Cap accuracy — if better than 50m (high-precision GPS), use network-level ~1000-2000m
-        // We accept any accuracy; just record what the browser gives
         const city = await getCityName(lat, lng);
         setGps({ status: "granted", lat, lng, accuracy, city });
       },
@@ -119,6 +116,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (gpsEnabled && gps.status === "idle") requestGps();
   }, [gpsEnabled, gps.status, requestGps]);
+
   // ── Form submit ───────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -127,7 +125,6 @@ export default function LoginPage() {
     if (!username.trim()) { setFormError("Username is required."); return; }
     if (!password)        { setFormError("Password is required."); return; }
 
-    // GPS is ALWAYS mandatory — toggle only controls whether we auto-request it
     if (gps.status === "idle" || gps.status === "requesting") {
       setFormError("Please wait — acquiring your location…");
       if (gps.status === "idle") requestGps();
@@ -154,31 +151,16 @@ export default function LoginPage() {
           if (ipCheck.ok) {
             const ipResult = await ipCheck.json();
             if (ipResult.allowed === false) {
-              // Unauthorised IP → lock
-              setLoginLocked(true);
-              setLastUnauthorisedIp(ipResult.ip ?? "");
-              setFormError("LOGIN DISABLED ENTER CODE TO ENABLE");
-              if (!codeSent) {
-                setCodeSent(true);
-                fetch("/api/unlock-code", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ ip: ipResult.ip ?? "", username: username.trim() }),
-                }).catch(() => {});
-              }
+              // Unauthorised IP → show OTP input (OTP already sent by check-ip API)
+              setPendingIp(ipResult.ip ?? "");
+              setIpOtpPending(true);
+              setFormError("");
               setLoading(false);
               return;
-            } else {
-              // IP is authorised — clear any stale lockout state and proceed
-              setLoginLocked(false);
-              setCodeSent(false);
-              setUnlockCode("");
-              setUnlockError("");
-              setFormError("");
             }
           }
         } catch {
-          // If check-ip fails, proceed — fail open so users aren't locked out.
+          // If check-ip fails, proceed — fail open
         }
       }
 
@@ -193,11 +175,8 @@ export default function LoginPage() {
 
       const ok = await login(username, password, gpsPayload);
       if (ok && username.trim().toLowerCase() === "master") {
-        // Set OTP pending BEFORE logout so logout doesn't clear it
         setMasterOtpPending(true);
-        // Undo the login — don't grant session yet, wait for OTP
         logout();
-        // Fire OTP email
         await fetch("/api/master-otp", { method: "POST" });
         return;
       }
@@ -210,7 +189,44 @@ export default function LoginPage() {
     }
   }
 
-  // ── GPS badge (shown below toggle area) ──────────────────────────────────
+  // ── IP OTP submit ─────────────────────────────────────────────────────────
+  async function handleIpOtpSubmit() {
+    if (ipOtpCode.length !== 6) { setIpOtpError("6-digit code enter karein."); return; }
+    setIpOtpLoading(true);
+    setIpOtpError("");
+    try {
+      const res = await fetch("/api/check-ip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ip: pendingIp, username: username.trim(), code: ipOtpCode }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        // OTP verified — now do the actual login
+        const currentGps = gps;
+        const gpsPayload =
+          currentGps.status === "granted"
+            ? { latitude: currentGps.lat, longitude: currentGps.lng, gpsAccuracy: currentGps.accuracy, city: currentGps.city }
+            : currentGps.status === "unavailable"
+            ? { gpsError: "Geolocation API not available" }
+            : {};
+        const ok = await login(username, password, gpsPayload);
+        if (!ok) {
+          setIpOtpError("Invalid username or password.");
+          setIpOtpPending(false);
+        }
+      } else {
+        setIpOtpError("Incorrect or expired OTP. Please check your email.");
+        setIpOtpCode("");
+      }
+    } catch {
+      setIpOtpError("Verification failed. Please try again.");
+    } finally {
+      setIpOtpLoading(false);
+    }
+  }
+
+  // ── Master OTP submit ─────────────────────────────────────────────────────
   async function handleMasterOtpSubmit() {
     if (masterOtp.length !== 4) { setMasterOtpError("Enter the 4-digit code."); return; }
     setMasterOtpLoading(true);
@@ -223,7 +239,6 @@ export default function LoginPage() {
       });
       const data = await res.json() as { valid: boolean; newCodeSent?: boolean; attemptsLeft?: number };
       if (data.valid) {
-        // Now actually log in — GPS payload re-assembled from current gps state
         const currentGps = gps;
         const gpsPayload =
           currentGps.status === "granted"
@@ -234,9 +249,7 @@ export default function LoginPage() {
         await login("master", password, gpsPayload);
         setMasterOtpPending(false);
         setPassword("");
-        // Dashboard will show automatically once isLoggedIn becomes true
       } else if (data.newCodeSent) {
-        // 5 failed attempts — new code automatically sent
         setMasterOtp("");
         setMasterOtpError("5 failed attempts. A new code has been sent to the administrator's email.");
       } else {
@@ -250,50 +263,10 @@ export default function LoginPage() {
     }
   }
 
-  async function handleUnlock() {
-    if (unlockCode.length !== 6) { setUnlockError("Enter the 6-digit unlock code."); return; }
-    setUnlockLoading(true);
-    setUnlockError("");
-    try {
-      // If lastUnauthorisedIp is empty (e.g. after page reload), re-fetch current IP
-      let ip = lastUnauthorisedIp;
-      if (!ip) {
-        try {
-          const ipCheck = await fetch(
-            `/api/check-ip?username=${encodeURIComponent(username.trim())}`,
-            { cache: "no-store" }
-          );
-          if (ipCheck.ok) {
-            const ipResult = await ipCheck.json();
-            ip = ipResult.ip ?? "";
-            setLastUnauthorisedIp(ip);
-          }
-        } catch { /* ignore */ }
-      }
-
-      const res = await fetch(
-        `/api/unlock-code?ip=${encodeURIComponent(ip)}&username=${encodeURIComponent(username.trim())}&code=${encodeURIComponent(unlockCode)}`
-      );
-      const data = await res.json();
-      if (data.valid) {
-        // Hard refresh — clears all lock state and lets user login fresh
-        window.location.reload();
-      } else {
-        setUnlockError("Invalid or expired code. Please check the email.");
-      }
-    } catch {
-      setUnlockError("Failed to verify code. Please try again.");
-    } finally {
-      setUnlockLoading(false);
-    }
-  }
-
+  // ── GPS badge ─────────────────────────────────────────────────────────────
   function GpsBadge() {
     if (!gpsEnabled) return null;
-
-    // "requesting" — silent, show nothing
     if (gps.status === "requesting") return null;
-
     if (gps.status === "denied")
       return (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-2">
@@ -312,8 +285,6 @@ export default function LoginPage() {
           </div>
         </div>
       );
-
-    // granted → city shown in top-right, no badge needed here
     return null;
   }
 
@@ -365,7 +336,7 @@ export default function LoginPage() {
       {/* ══════ RIGHT PANEL ══════ */}
       <div className="flex-1 flex flex-col bg-slate-50 min-h-screen relative">
 
-        {/* ── GPS toggle — top right corner ── */}
+        {/* GPS toggle — top right corner */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500 select-none">
             {gps.status === "granted" ? `📍 ${gps.city}` : "📍 Location"}
@@ -375,14 +346,12 @@ export default function LoginPage() {
             onClick={() => {
               const next = !gpsEnabled;
               setGpsEnabled(next);
-              // If turning ON and GPS was never requested, request now
               if (next && gps.status === "idle") requestGps();
             }}
             className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
               gpsEnabled ? "bg-blue-600" : "bg-slate-300"
             }`}
             aria-label={gpsEnabled ? "Disable location requirement" : "Enable location requirement"}
-            title={gpsEnabled ? "Location ON — click to disable" : "Location OFF — click to enable"}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${gpsEnabled ? "translate-x-5" : ""}`} />
           </button>
@@ -400,22 +369,7 @@ export default function LoginPage() {
         <div className="flex-1 flex items-center justify-center px-6 py-8 sm:px-12">
           <div className="w-full max-w-sm space-y-5">
 
-            {/* Welcome */}
-            <div className="space-y-2">
-              <div className="hidden lg:block mb-4">
-                <img src="/logos/logo2-1.png" alt="Prestair Systems LLP" className="h-12 w-auto" />
-              </div>
-              {!masterOtpPending && (
-                <>
-                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
-                  <p className="text-slate-500 text-sm">Sign in to access your Quotation Dashboard</p>
-                </>
-              )}
-            </div>
-
-            {/* GPS badge */}
-            <GpsBadge />
-
+            {/* ── Master OTP screen ── */}
             {masterOtpPending ? (
               <div className="space-y-5">
                 <div className="space-y-2">
@@ -454,9 +408,71 @@ export default function LoginPage() {
                   {masterOtpLoading ? "Verifying..." : "Verify & Continue"}
                 </button>
               </div>
+
+            ) : ipOtpPending ? (
+              /* ── Unauthorised IP OTP screen ── */
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">OTP Verification</h2>
+                  <p className="text-slate-500 text-sm">
+                    Aapka IP address authorised nahi hai. Ek 6-digit OTP{" "}
+                    <span className="font-semibold text-slate-700">agm.prestairsystem@gmail.com</span>{" "}
+                    par bheja gaya hai. OTP enter karein aur dashboard access karein.
+                  </p>
+                </div>
+                {ipOtpError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    {ipOtpError}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">6-Digit OTP</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={ipOtpCode}
+                    onChange={(e) => { setIpOtpCode(e.target.value.replace(/\D/g, "")); setIpOtpError(""); }}
+                    placeholder="OTP enter karein"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-widest font-mono text-lg shadow-sm"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") handleIpOtpSubmit(); }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleIpOtpSubmit}
+                  disabled={ipOtpLoading || ipOtpCode.length !== 6}
+                  className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                  style={{background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)"}}
+                >
+                  {ipOtpLoading ? "Verifying..." : "Verify & Login"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIpOtpPending(false); setIpOtpCode(""); setIpOtpError(""); }}
+                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 underline"
+                >
+                  Wapas jaiye
+                </button>
+              </div>
+
             ) : (
+              /* ── Normal login form ── */
               <>
-                {/* Form */}
+                <div className="space-y-2">
+                  <div className="hidden lg:block mb-4">
+                    <img src="/logos/logo2-1.png" alt="Prestair Systems LLP" className="h-12 w-auto" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
+                  <p className="text-slate-500 text-sm">Sign in to access your Quotation Dashboard</p>
+                </div>
+
+                <GpsBadge />
+
                 <form onSubmit={handleSubmit} noValidate className="space-y-4">
                   {formError && (
                     <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
@@ -464,49 +480,6 @@ export default function LoginPage() {
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                       {formError}
-                    </div>
-                  )}
-
-                  {loginLocked && (
-                    <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">🔒</span>
-                          <p className="text-sm font-bold text-amber-800">Login Disabled</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => window.location.reload()}
-                          className="text-xs text-amber-600 underline hover:text-amber-800"
-                        >
-                          Refresh Page
-                        </button>
-                      </div>
-                      <p className="text-xs text-amber-700 leading-relaxed">
-                        Login has been disabled due to an unauthorised IP attempt. An unlock code has been sent to the administrator. Enter it below to re-enable login.
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={unlockCode}
-                          onChange={(e) => { setUnlockCode(e.target.value.replace(/\D/g, "")); setUnlockError(""); }}
-                          placeholder="6-digit code"
-                          className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-center tracking-widest font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleUnlock}
-                          disabled={unlockLoading}
-                          className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {unlockLoading ? "..." : "UNLOCK"}
-                        </button>
-                      </div>
-                      {unlockError && (
-                        <p className="text-xs text-red-600 font-medium">{unlockError}</p>
-                      )}
                     </div>
                   )}
 
@@ -560,7 +533,7 @@ export default function LoginPage() {
 
                   <button
                     type="submit"
-                    disabled={loading || gpsBlocking || loginLocked}
+                    disabled={loading || gpsBlocking}
                     className="w-full py-3 rounded-xl text-white font-semibold text-sm shadow-lg hover:shadow-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{background: "linear-gradient(135deg, #0f172a, #1e3a5f, #2563eb)"}}
                   >
