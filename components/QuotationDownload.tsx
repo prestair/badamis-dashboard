@@ -136,7 +136,7 @@ async function downloadExcel(props: Props) {
   const cBorder = { alignment: { wrapText: true, vertical: "top", horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   const lBorder = { alignment: { wrapText: true, vertical: "top" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
 
-  type CellVal = string | number | { v: string | number; s: object };
+  type CellVal = string | number | { v: string | number; s: object } | { v: number; f: string; s: object };
   const data: CellVal[][] = [];
   const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
   let r = 0;
@@ -179,55 +179,118 @@ async function downloadExcel(props: Props) {
   const th = { font: { bold: true, sz: 12, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "C8C8C8" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
   data.push([sc("SL NO", th), sc("ITEM CODE", th), sc("ITEM NAME", th), sc("ADDITIONAL DESCRIPTION", th), sc("SIZE", th), sc("HSN CODE", th), sc("QTY", th), sc("RATE", th), sc("AMOUNT", th)]); r++;
 
-  // Item rows
+  // ── Item rows — AMOUNT column uses formula =QTY*RATE ──────────────────────
+  // Track row numbers of item rows so we can SUM them in the totals.
+  // Excel rows are 1-indexed; `r` here is 0-indexed data-array index.
+  const partAItemExcelRows: number[] = []; // 1-based Excel row numbers of Part A item rows
+
   for (const row of filterEmptySections(props.rows)) {
     if (row.rowType === "section") {
       const ss = { font: { bold: true }, fill: { fgColor: { rgb: "C6EFCE" } }, alignment: { horizontal: "center", wrapText: true }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
       data.push([sc((row.desc || row.section || "").toUpperCase(), ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss), sc("", ss)]);
       merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
     } else {
-      data.push([sc(row.slNo || "", cBorder), sc(row.itemCode || "", cBorder), sc(row.desc || "", lBorder), sc(row.additionalColumn || "", lBorder), sc(row.size || "", cBorder), sc(row.hsn || "", cBorder), sc(row.qty || "1", cBorder), sc(row.rate || "NQ", cBorder), sc(row.amt !== null ? row.amt : "NQ", cBorder)]); r++;
+      const excelRow = r + 1; // 1-based
+      partAItemExcelRows.push(excelRow);
+      const qtyVal = row.qty ? Number(row.qty) : 1;
+      const rateVal = row.rate !== null && row.rate !== undefined && row.rate !== "NQ" ? Number(row.rate) : null;
+      // Amount: formula if rate is a number, else "NQ"
+      const amtCell = rateVal !== null
+        ? { v: 0, f: `G${excelRow}*H${excelRow}`, s: cBorder }
+        : sc("NQ", cBorder);
+      data.push([
+        sc(row.slNo || "", cBorder),
+        sc(row.itemCode || "", cBorder),
+        sc(row.desc || "", lBorder),
+        sc(row.additionalColumn || "", lBorder),
+        sc(row.size || "", cBorder),
+        sc(row.hsn || "", cBorder),
+        sc(qtyVal, cBorder),                                        // QTY — number
+        rateVal !== null ? sc(rateVal, cBorder) : sc("NQ", cBorder), // RATE — number
+        amtCell,                                                    // AMOUNT — formula
+      ]); r++;
     }
   }
 
-  // Totals — label merged from HSN col (5) to RATE col (7), amount in col 8
+  // Totals — label merged from HSN col (5) to RATE col (7), amount in col 8 (I)
   const ts = { font: { bold: true }, fill: { fgColor: { rgb: "FFFFCC" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-  const pushT = (label: string, amount: number | string, style: object) => { data.push(["", "", "", "", "", sc(label, style), sc("", style), sc("", style), sc(amount, style)]); merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++; };
+
+  // pushT for static values (discounts etc.)
+  const pushT = (label: string, amount: number | string, style: object) => {
+    data.push(["", "", "", "", "", sc(label, style), sc("", style), sc("", style), sc(amount, style)]);
+    merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
+  };
+  // pushTF for formula cells
+  const pushTF = (label: string, formula: string, style: object) => {
+    data.push(["", "", "", "", "", sc(label, style), sc("", style), sc("", style), { v: 0, f: formula, s: style }]);
+    merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
+  };
 
   // Part A totals
   const exPctA = safeNum(props.discounts.discountPercentA ?? 0);
-  const exDiscountAmountA = Math.round(safeNum(props.gross) * exPctA / 100);
   const exSpecialAmt  = safeNum(props.discounts.special.amount);
   const exSeasonalAmt = safeNum(props.discounts.seasonal.amount);
-  const exAfterDiscountA = Math.max(0, safeNum(props.gross) - exDiscountAmountA - exSpecialAmt); // excludes seasonal
-  const exFinalTotalA    = Math.max(0, exAfterDiscountA - exSeasonalAmt);                        // after seasonal
-  const exEffectiveA     = props.discounts.seasonal.enabled ? exFinalTotalA : exAfterDiscountA;
   const exPartBEnabled = props.discounts.partBEnabled === true;
   const exPctB = safeNum(props.discounts.discountPercentB ?? 0);
   const exGrossB = safeNum(props.grossB ?? 0);
   const exDiscountAmountB = Math.round(exGrossB * exPctB / 100);
   const exAfterDiscountB = Math.max(0, exGrossB - exDiscountAmountB);
-  const exCombined = exEffectiveA + (exPartBEnabled ? exAfterDiscountB : 0);
 
-  pushT("TOTAL AMOUNT", safeNum(props.gross), ts);
-  if (exPctA > 0) pushT(`DISCOUNT ${exPctA}%`, exDiscountAmountA, ts);
-  if (props.discounts.special.enabled) pushT("SPECIAL DISCOUNT", exSpecialAmt, ts);
-  if (props.discounts.legacyAmount > 0) pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
-  if (exPctA > 0 || props.discounts.special.enabled || props.discounts.seasonal.enabled || props.discounts.legacyAmount > 0) {
-    const afterLabelA = (exPartBEnabled && !props.discounts.seasonal.enabled) ? " (A)" : "";
-    pushT("TOTAL AFTER DISCOUNT" + afterLabelA, exAfterDiscountA, ts);
+  // TOTAL AMOUNT = SUM of all Part A item rows in col I
+  let totalAmountACell: string;
+  let totalAmountAExcelRow: number;
+  if (partAItemExcelRows.length > 0) {
+    const first = partAItemExcelRows[0];
+    const last  = partAItemExcelRows[partAItemExcelRows.length - 1];
+    totalAmountAExcelRow = r + 1;
+    totalAmountACell = `I${totalAmountAExcelRow}`;
+    pushTF("TOTAL AMOUNT", `SUM(I${first}:I${last})`, ts);
+  } else {
+    totalAmountAExcelRow = r + 1;
+    totalAmountACell = `I${totalAmountAExcelRow}`;
+    pushT("TOTAL AMOUNT", safeNum(props.gross), ts);
   }
-  if (props.discounts.seasonal.enabled) pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
-  if (props.discounts.seasonal.enabled) pushT("FINAL TOTAL" + (exPartBEnabled ? " (A)" : ""), exFinalTotalA, ts);
 
-  // Part B rows + totals in Excel
+  // Discount rows — static values (percentages are fixed at save time)
+  let afterDiscountACell = totalAmountACell; // default: no discount
+  if (exPctA > 0) {
+    const discRowA = r + 1;
+    pushTF(`DISCOUNT ${exPctA}%`, `ROUND(${totalAmountACell}*${exPctA}/100,0)`, ts);
+    afterDiscountACell = `I${r}`; // will be overwritten below
+    const afterRowA = r + 1;
+    pushTF("TOTAL AFTER DISCOUNT", `MAX(0,${totalAmountACell}-I${discRowA}${exSpecialAmt > 0 ? `-${exSpecialAmt}` : ""})`, ts);
+    afterDiscountACell = `I${afterRowA}`;
+  }
+  if (props.discounts.special.enabled && exSpecialAmt > 0) {
+    if (exPctA === 0) {
+      // no % discount — special discount directly from gross
+      const specialRow = r + 1;
+      pushT("SPECIAL DISCOUNT", exSpecialAmt, ts);
+      const afterSpecialRow = r + 1;
+      pushTF("TOTAL AFTER DISCOUNT", `MAX(0,${totalAmountACell}-I${specialRow})`, ts);
+      afterDiscountACell = `I${afterSpecialRow}`;
+    }
+    // if exPctA > 0, special already baked into TOTAL AFTER DISCOUNT formula above
+  }
+  if (props.discounts.legacyAmount > 0) {
+    pushT("DISCOUNT", safeNum(props.discounts.legacyAmount), ts);
+  }
+
+  let effectiveACell = afterDiscountACell;
+  if (props.discounts.seasonal.enabled && exSeasonalAmt > 0) {
+    pushT("SEASONAL DISCOUNT", exSeasonalAmt, ts);
+    const finalRowA = r + 1;
+    pushTF("FINAL TOTAL" + (exPartBEnabled ? " (A)" : ""), `MAX(0,${afterDiscountACell}-${exSeasonalAmt})`, ts);
+    effectiveACell = `I${finalRowA}`;
+  }
+
+  // Part B rows + totals
+  const partBItemExcelRows: number[] = [];
   if (exPartBEnabled && props.partBRows && props.partBRows.length > 0) {
-    // Part B heading
-    const partBHeadStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "3C3C78" } }, alignment: { horizontal: "center" } , border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
+    const partBHeadStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "3C3C78" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
     data.push([sc("PART - B", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle), sc("", partBHeadStyle)]);
     merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
 
-    // Part B items
     let partBSlNo = 0;
     for (const row of filterEmptySections(props.partBRows)) {
       if (row.rowType === "section") {
@@ -236,38 +299,78 @@ async function downloadExcel(props: Props) {
         merges.push({ s: { r, c: 0 }, e: { r, c: 8 } }); r++;
       } else {
         partBSlNo++;
-        data.push([sc(String(partBSlNo), cBorder), sc(row.itemCode || "", cBorder), sc(row.desc || "", lBorder), sc(row.additionalColumn || "", lBorder), sc(row.size || "", cBorder), sc(row.hsn || "", cBorder), sc(row.qty || "1", cBorder), sc(row.rate || "NQ", cBorder), sc(row.amt !== null ? row.amt : "NQ", cBorder)]); r++;
+        const excelRowB = r + 1;
+        partBItemExcelRows.push(excelRowB);
+        const qtyValB = row.qty ? Number(row.qty) : 1;
+        const rateValB = row.rate !== null && row.rate !== undefined && row.rate !== "NQ" ? Number(row.rate) : null;
+        const amtCellB = rateValB !== null
+          ? { v: 0, f: `G${excelRowB}*H${excelRowB}`, s: cBorder }
+          : sc("NQ", cBorder);
+        data.push([
+          sc(String(partBSlNo), cBorder),
+          sc(row.itemCode || "", cBorder),
+          sc(row.desc || "", lBorder),
+          sc(row.additionalColumn || "", lBorder),
+          sc(row.size || "", cBorder),
+          sc(row.hsn || "", cBorder),
+          sc(qtyValB, cBorder),
+          rateValB !== null ? sc(rateValB, cBorder) : sc("NQ", cBorder),
+          amtCellB,
+        ]); r++;
       }
     }
 
     // Part B totals
-    // Part B totals — (B) label us row par jahan se B ka amount A+B mein jaata hai
-    pushT("TOTAL AMOUNT" + (exPctB > 0 ? "" : " (B)"), exGrossB, ts);
-    if (exPctB > 0) {
-      pushT(`DISCOUNT ${exPctB}%`, exDiscountAmountB, ts);
-      pushT("TOTAL AFTER DISCOUNT (B)", exAfterDiscountB, ts);
+    let totalBCell: string;
+    if (partBItemExcelRows.length > 0) {
+      const firstB = partBItemExcelRows[0];
+      const lastB  = partBItemExcelRows[partBItemExcelRows.length - 1];
+      const totalBRow = r + 1;
+      totalBCell = `I${totalBRow}`;
+      pushTF("TOTAL AMOUNT" + (exPctB > 0 ? "" : " (B)"), `SUM(I${firstB}:I${lastB})`, ts);
+    } else {
+      const totalBRow = r + 1;
+      totalBCell = `I${totalBRow}`;
+      pushT("TOTAL AMOUNT (B)", exGrossB, ts);
     }
-    pushT("TOTAL AMOUNT (A+B)", exCombined, ts);
+    let afterBCell = totalBCell;
+    if (exPctB > 0) {
+      const discBRow = r + 1;
+      pushTF(`DISCOUNT ${exPctB}%`, `ROUND(${totalBCell}*${exPctB}/100,0)`, ts);
+      const afterBRow = r + 1;
+      pushTF("TOTAL AFTER DISCOUNT (B)", `MAX(0,${totalBCell}-I${discBRow})`, ts);
+      afterBCell = `I${afterBRow}`;
+    }
+    const totalABRow = r + 1;
+    pushTF("TOTAL AMOUNT (A+B)", `${effectiveACell}+${afterBCell}`, ts);
+    effectiveACell = `I${totalABRow}`;
   }
 
-  // Combined totals
+  // Combined totals — transportation, packing, taxable, GST, grand total
+  let taxableFormulaParts = effectiveACell;
   if (props.discounts.transportationAmount === 0) {
     data.push(["", "", "", "", "", sc("TRANSPORTATION CHARGES", ts), sc("", ts), sc("", ts), sc("As Per Actuals", ts)]);
     merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
   } else {
+    const transpRow = r + 1;
     pushT("TRANSPORTATION CHARGES", safeNum(props.discounts.transportationAmount), ts);
+    taxableFormulaParts += `+I${transpRow}`;
   }
   if (props.discounts.packingAmount === 0) {
     data.push(["", "", "", "", "", sc("PACKING CHARGES", ts), sc("", ts), sc("", ts), sc("As Per Actuals", ts)]);
     merges.push({ s: { r, c: 5 }, e: { r, c: 7 } }); r++;
   } else {
+    const packRow = r + 1;
     pushT("PACKING CHARGES", safeNum(props.discounts.packingAmount), ts);
+    taxableFormulaParts += `+I${packRow}`;
   }
-  pushT("TAXABLE VALUE", safeNum(exCombined + props.discounts.transportationAmount + props.discounts.packingAmount), ts);
+  const taxableRow = r + 1;
+  pushTF("TAXABLE VALUE", taxableFormulaParts, ts);
   if (props.discounts.gstEnabled !== false) {
-    pushT("GST 18%", safeNum(props.gst), ts);
+    const gstRow = r + 1;
+    pushTF("GST 18%", `ROUND(I${taxableRow}*18/100,0)`, ts);
     const gs = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "FFD700" } }, alignment: { horizontal: "center" }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-    pushT("GRAND TOTAL", safeNum(props.grandTotal), gs);
+    pushTF("GRAND TOTAL", `I${taxableRow}+I${gstRow}`, gs);
   }
   data.push([]); r++;
 
