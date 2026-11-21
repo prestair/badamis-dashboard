@@ -181,18 +181,18 @@ export default function HeaderActions() {
   function exportDisplayedCSV() {
     if (loading || visibleQuotations.length === 0) return;
     const headers = ["No.", "Quotation No.", "Date", "Party Name", "Address", "Grand Total", "User", "Edit Count"];
-    const escapeCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const escapeText = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = visibleQuotations.map((quotation) => [
-      quotation.serialNo,
-      quotation.quotationNo,
-      fmtDate(quotation.date),
-      quotation.partyName,
-      quotation.partyAddress,
-      quotation.grandTotal,
-      quotation.createdBy || "Unknown",
-      quotation.editCount,
-    ].map(escapeCell).join(","));
-    const csv = `\uFEFF${[headers.map(escapeCell).join(","), ...rows].join("\n")}`;
+      escapeText(quotation.serialNo),
+      escapeText(quotation.quotationNo),
+      escapeText(fmtDate(quotation.date)),
+      escapeText(quotation.partyName),
+      escapeText(quotation.partyAddress),
+      quotation.grandTotal,          // number — no quotes, Excel stores as number
+      escapeText(quotation.createdBy || "Unknown"),
+      quotation.editCount ?? 0,      // number — no quotes
+    ].join(","));
+    const csv = `\uFEFF${[headers.map(escapeText).join(","), ...rows].join("\n")}`;
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const link = document.createElement("a");
     link.href = url;
